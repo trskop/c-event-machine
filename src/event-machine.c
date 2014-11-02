@@ -1,0 +1,407 @@
+#define _GNU_SOURCE
+#include "event-machine.h"
+#include "event-machine/result-internal.h"
+#include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <sys/epoll.h>
+#include <unistd.h>
+
+
+enum EM_result event_machine_init(EM *em)
+{
+    if_null (em)
+    {
+        return EM_ERROR_NULL;
+    }
+
+    if_invalid_max_events (em->max_events)
+    {
+        em->epoll_events = NULL;
+        em->max_events = EM_DEFAULT_MAX_EVENTS;
+    }
+
+    if_null (em->epoll_events)
+    {
+        em->epoll_events = malloc(sizeof(struct epoll_event) * em->max_events);
+
+        /* Function event_machine_destroy() will call
+         * free(em->epoll_events) when this flag is set.
+         */
+        em->do_free_epoll_events = true;
+    }
+    else
+    {
+        em->do_free_epoll_events = false;
+    }
+
+    /* We need break_loop_pipe to be non-blocking to prevent writing
+     * in to it from blocking.
+     *
+     * Imagine situation where one thread is running epoll_wait()
+     * loop and some other thread calls event_machine_terminate()
+     * which writes in to write end of the pipe to notify former that
+     * it should terminate. Now if epoll_wait() loop terminates then
+     * there is nobody to read data from the pipe. Since pipes have
+     * finite buffer size then after filling it up any subsequent
+     * write, i.e. event_machine_terminate() call, would be blocked.
+     *
+     * XXX: To get rid of _GNU_SOURCE declaration we would need to switch to
+     *      "pipe() + 2 * fcntl()".
+     */
+    if_not_zero (pipe2(em->break_loop_pipe, O_CLOEXEC | O_NONBLOCK))
+    {
+        return EM_ERROR_PIPE;
+    }
+
+    /* The break_loop_pipe is used to notify main event handling loop
+     * that it should terminate. As a result we need to react to
+     * awaiting data for read event on the read end of the pipe. The
+     * write end is used by event_machine_terminate() to send the
+     * notification.
+     */
+    em->break_loop_event_descriptor.events = EPOLLIN;
+    em->break_loop_event_descriptor.fd = em->break_loop_pipe[0];
+
+    /* This event is handled internally so there is no need for spplying
+     * private data or even event handler.
+     */
+    em->break_loop_event_descriptor.data = NULL;
+    em->break_loop_event_descriptor.handler = NULL;
+
+    /* Function epoll_create1() was introduced in Linux kernel 2.6.27 and glibc
+     * support was added in version 2.9.
+     */
+    int epoll_fd = epoll_create1(EPOLL_CLOEXEC);
+    if_invalid_fd (epoll_fd)
+    {
+        return EM_ERROR_EPOLL_CREATE;
+    }
+    em->epoll_fd = epoll_fd;
+
+    struct epoll_event event =
+        { .events = em->break_loop_event_descriptor.events
+        , .data.ptr = &(em->break_loop_event_descriptor)
+        };
+    if_not_zero (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, em->break_loop_pipe[0],
+        &event))
+    {
+        return EM_ERROR_EPOLL_CTL;
+    }
+
+    return EM_SUCCESS;
+}
+
+enum EM_result event_machine_destroy(EM *em)
+{
+    if_null (em)
+    {
+        return EM_ERROR_NULL;
+    }
+
+    /* Closing epoll_fd first to ensure that any epoll_ctl() and epoll_wait()
+     * on it would fail.
+     */
+    if_valid_fd (em->epoll_fd)
+    {
+        if_not_zero (close(em->epoll_fd));
+        {
+            return EM_ERROR_CLOSE;
+        }
+        em->epoll_fd = -1;
+    }
+
+    /* Freeing memory for storing epoll events after closing epoll file
+     * descriptor is important, since there is a possibility that main loop is
+     * running while someone called event_machine_destroy() and then we wan't
+     * it to fail either on bad faildescriptor (if blocked on epoll_wait()) or
+     * on NULL pointer rather then any random memory.
+     */
+    if (em->do_free_epoll_events)
+    {
+        void *tmp = em->epoll_events;
+        em->epoll_events = NULL;
+        free(tmp);
+    }
+
+    /* Closing write end of break loop pipe first to make sure that writing in
+     * to it would fail.
+     */
+    if_valid_fd (em->break_loop_pipe[1])
+    {
+        if_not_zero (close(em->break_loop_pipe[1]))
+        {
+            return EM_ERROR_CLOSE;
+        }
+        em->break_loop_pipe[1] = -1;
+    }
+
+    if_valid_fd (em->break_loop_pipe[0])
+    {
+        if_not_zero (close(em->break_loop_pipe[0]))
+        {
+            return EM_ERROR_CLOSE;
+        }
+        em->break_loop_pipe[0] = -1;
+    }
+
+    return EM_SUCCESS;
+}
+
+static inline enum EM_result event_machine_run_once(EM *em,
+    int epoll_fd, struct epoll_event epoll_events[], int max_events,
+    int break_loop_read_fd, bool *break_loop)
+{
+    int num_events = epoll_wait(epoll_fd, epoll_events, max_events, -1);
+    if_negative (num_events)
+    {
+        return EM_ERROR_EPOLL_WAIT;
+    }
+
+    for (int i = 0; i < num_events; i++)
+    {
+        EM_event_descriptor *ed = (EM_event_descriptor *)epoll_events[i].data.ptr;
+        if (ed->fd == break_loop_read_fd)
+        {
+            char ch;
+
+            (*break_loop) = true;
+            if_negative (read(break_loop_read_fd, &ch, 1))
+            {
+                return EM_ERROR_READ;
+            }
+            /* Case that read() would return 0 doesn't make sense,
+             * since that would contradict the fact that we are
+             * handling event which is invoked when data are
+             * available for reading.
+             */
+        }
+        else
+        {
+            ed->handler(em, epoll_events[i].events, ed->fd, ed->data);
+        }
+    }
+
+    return EM_SUCCESS;
+}
+
+enum EM_result event_machine_run(EM *em)
+{
+    if_null (em)
+    {
+        return EM_ERROR_NULL;
+    }
+    if_invalid_fd (em->epoll_fd)
+    {
+        return EM_ERROR_BADFD;
+    }
+    if_invalid_max_events (em->max_events)
+    {
+        return EM_ERROR_MAX_EVENTS_TOO_SMALL;
+    }
+    if_null (em->epoll_events)
+    {
+        return EM_ERROR_EVENTS_NULL;
+    }
+
+    if_negative (fcntl(em->epoll_fd, F_GETFL, 0))
+    {
+        return EM_ERROR_BADFD;
+    }
+
+    for (bool break_loop = false; not(break_loop); )
+    {
+        enum EM_result ret =
+            event_machine_run_once(em, em->epoll_fd, em->epoll_events,
+                em->max_events, em->break_loop_pipe[0], &break_loop);
+        if_em_failure (ret)
+        {
+            return ret;
+        }
+    }
+
+    return EM_SUCCESS;
+}
+
+enum EM_result event_machine_terminate(EM *em)
+{
+    if_null (em)
+    {
+        return EM_ERROR_NULL;
+    }
+
+    /* If this file descriptor is invalid it may indicate that either we are
+     * trying to call unitialized event machine or if it was already destroyed.
+     */
+    if_invalid_fd (em->break_loop_pipe[1])
+    {
+        return EM_ERROR_BADFD;
+    }
+    if_negative(fcntl(em->break_loop_pipe[1], F_GETFL, 0))
+    {
+        return EM_ERROR_BADFD;
+    }
+
+    char ch = 0;
+    if_negative (write(em->break_loop_pipe[1], &ch, 1))
+    {
+        /* EAGAIN or EWOULDBLOCK indicate that pipe is full and write
+         * operation would block. In such case we don't need to write
+         * anything and there were no error.
+         */
+        if (errno != EAGAIN && errno != EWOULDBLOCK)
+        {
+            return EM_ERROR_WRITE;
+        }
+    }
+
+    return EM_SUCCESS;
+}
+
+enum EM_result event_machine_add(EM *em, EM_event_descriptor *ed)
+{
+    if_null (em)
+    {
+        return EM_ERROR_NULL;
+    }
+    if_null (ed)
+    {
+        return EM_ERROR_DESCRIPTOR_NULL;
+    }
+
+    /* It doesn't make sense to try to register file descriptor if it's invalid
+     * or if epoll_fd is invalid. By checking for it we get more sensible error
+     * then if we wen't ahead and called epoll_ctl().
+     */
+    if (invalid_fd(em->epoll_fd) || invalid_fd(ed->fd))
+    {
+        return EM_ERROR_BADFD;
+    }
+    if (is_negative(fcntl(em->epoll_fd, F_GETFL, 0))
+        || is_negative(fcntl(ed->fd, F_GETFL, 0)))
+    {
+        return EM_ERROR_BADFD;
+    }
+
+    struct epoll_event ev = {.events = ed->events, .data.ptr = ed};
+    if_not_zero (epoll_ctl(em->epoll_fd, EPOLL_CTL_ADD, ed->fd, &ev))
+    {
+        return EM_ERROR_EPOLL_CTL;
+    }
+
+    if (em->descriptor_storage.insert != NULL)
+    {
+        return em->descriptor_storage.insert(ed->fd, ed);
+    }
+
+    return EM_SUCCESS;
+}
+
+/* TODO: "EM_event_descriptor **ed" argument is currently not used, but in the
+ * future it should return pointer to EM_event_descriptor structure that was
+ * associated with specified file descriptor.
+ *
+ * Interface such as this would allow leaving it for caller to deallocate
+ * unused memory.
+ */
+enum EM_result event_machine_delete(EM *em, int fd, EM_event_descriptor **ed)
+{
+    if_null (em)
+    {
+        return EM_ERROR_NULL;
+    }
+    if_null (ed)
+    {
+        return EM_ERROR_DESCRIPTOR_NULL;
+    }
+
+    /* It doesn't make sense to try to remove file descriptor if it's invalid
+     * or if epoll_fd is invalid. By checking for it we get more sensible error
+     * then if we wen't ahead and called epoll_ctl().
+     */
+    if (invalid_fd(em->epoll_fd) || invalid_fd(fd))
+    {
+        return EM_ERROR_BADFD;
+    }
+    if (is_negative(fcntl(em->epoll_fd, F_GETFL, 0))
+        || is_negative(fcntl(fd, F_GETFL, 0)))
+    {
+        return EM_ERROR_BADFD;
+    }
+
+    /* Linux kernel versions prior to 2.6.9 require fourth argument to
+     * epoll_ctl() to be non-NULL even though it's not used.
+     */
+    struct epoll_event ev;
+    if_not_zero (epoll_ctl(em->epoll_fd, EPOLL_CTL_DEL, fd, &ev))
+    {
+        return EM_ERROR_EPOLL_CTL;
+    }
+
+    /* Lookup EM_event_descriptor entry associated with fd and return it,
+     * unless user supplies NULL, then just skip this step.
+     *
+     * If em->descriptor_storage.remove is NULL, then either there is no
+     * descriptor storage supplied or it doesn't support removing elements.
+     * There is perfectly valid (and reasonable) implementation that doesn't
+     * support remove. There is however one limitation to such implementation.
+     * It may not report EM_ERROR_STORAGE_DUPLICATE_ENTRY when trying to insert
+     * new descriptor entry for the same event descriptor, otherwise
+     * event_machine_modify() would be unusable. 
+     */
+    if (not_null(ed) && not_null(em->descriptor_storage.remove))
+    {
+        return em->descriptor_storage.remove(fd, ed);
+    }
+
+    return EM_SUCCESS;
+}
+
+enum EM_result event_machine_modify(EM *em, int fd, EM_event_descriptor *ed,
+    EM_event_descriptor **old_ed)
+{
+    if_null (em)
+    {
+        return EM_ERROR_NULL;
+    }
+
+    if_null (ed)
+    {
+        return EM_ERROR_DESCRIPTOR_NULL;
+    }
+
+    /* It doesn't make sense to try to modify file descriptor if it's invalid
+     * or if epoll_fd is invalid. By checking for it we get more sensible error
+     * then if we wen't ahead and called epoll_ctl().
+     */
+    if (invalid_fd(em->epoll_fd) || invalid_fd(fd))
+    {
+        return EM_ERROR_BADFD;
+    }
+
+    if (is_negative(fcntl(em->epoll_fd, F_GETFL, 0))
+        || is_negative(fcntl(fd, F_GETFL, 0)))
+    {
+        return EM_ERROR_BADFD;
+    }
+
+    struct epoll_event ev = {.events = ed->events, .data.ptr = ed};
+    if_not_zero (epoll_ctl(em->epoll_fd, EPOLL_CTL_MOD, fd, &ev))
+    {
+        return EM_ERROR_EPOLL_CTL;
+    }
+
+    if (not_null(old_ed) && not_null(em->descriptor_storage.remove))
+    {
+        enum EM_result ret;
+        ret_em_failure_of (ret, em->descriptor_storage.remove(fd, old_ed));
+    }
+
+    if_not_null (em->descriptor_storage.insert)
+    {
+        return em->descriptor_storage.insert(fd, ed);
+    }
+
+    return EM_SUCCESS;
+}
