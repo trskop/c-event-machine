@@ -47,7 +47,7 @@ MK_OUT_DIRS = \
 
 $(DEPS)%.deps: $(SRC)%.c
 	@$(MK_OUT_DIRS)
-	$(CC) $(CPPFLAGS) -MM $(CC_OUTPUT_OPTION) $<
+	$(CC) $(CPPFLAGS) -MM -MT '$(subst $(SRC),$(OUT),$(<:%.c=%.o))' $(CC_OUTPUT_OPTION) $<
 
 $(OUT)%.o: $(SRC)%.c
 	@$(MK_OUT_DIRS)
