@@ -4,7 +4,7 @@ SRC = $(SRC_DIR)/
 OUT_DIR ?= out
 CC_VERSION := $(shell $(CC) -dumpversion)
 MACHINE_INFO := $(shell $(CC) -dumpmachine)
-OUT = $(OUT_DIR)/$(CC)-$(CC_VERSION)$(MACHINE_INFO)/
+OUT = $(OUT_DIR)/$(CC)-$(CC_VERSION)-$(MACHINE_INFO)/
 DEPS = $(OUT)dependency-files/
 
 LIB_DIR = lib
