@@ -14,6 +14,8 @@ LIB_PREFIX = $(LIB)lib
 SO_TARGET = $(LIB_PREFIX)$(LIB_BASE_NAME).so
 A_TARGET = $(LIB_PREFIX)$(LIB_BASE_NAME).a
 
+INSTALL_DIR ?= install-output
+
 EXE_DIR = $(OUT)exe
 EXE = $(EXE_DIR)/
 
@@ -91,6 +93,17 @@ build-example-executables: CPPFLAGS += -L$(LIB)
 build-example-executables: LDLIBS += -levent-machine
 build-example-executables: $(EXAMPLE_EXECUTABLES)
 .PHONY: build-examples
+
+install: all
+	install -d $(INSTALL_DIR)/bin/
+	install -d $(INSTALL_DIR)/lib/
+	install -d $(INSTALL_DIR)/include/
+	install -d $(INSTALL_DIR)/include/event-machine/
+	install -D $(SO_TARGET) $(INSTALL_DIR)/lib
+	install -D $(A_TARGET) $(INSTALL_DIR)/lib
+	install -D src/event-machine.h $(INSTALL_DIR)/include/
+	install -D src/event-machine/result.h $(INSTALL_DIR)/include/event-machine
+.PHONY: install
 
 clean: clean-objects clean-dependency-files
 .PHONY: clean
