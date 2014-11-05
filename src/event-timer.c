@@ -24,7 +24,7 @@ static void event_timer_internal_timeout(EM *em, uint32_t events, int fd, void *
     }
 }
 
-uint8_t event_timer_creat(EM *event_machine, Event_timer *timer,
+uint32_t event_timer_creat(EM *event_machine, Event_timer *timer,
     Event_timer_handler callback, void *data)
 {
     timer->event_machine = event_machine;
