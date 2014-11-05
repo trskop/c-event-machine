@@ -19,8 +19,8 @@
 #define TIMER_CALLBACK(timer)   (timer->callback)
 
 
-static void internal_timeout_handler(EM *em, uint32_t events, int fd,
-    void *data)
+static void internal_timeout_handler(EM *const em, const uint32_t events,
+    const int fd, void *const data)
 {
     uint64_t number_of_timeouts;
 
@@ -38,8 +38,8 @@ static void internal_timeout_handler(EM *em, uint32_t events, int fd,
     }
 }
 
-uint32_t event_timer_create(EM *event_machine, Event_timer *timer,
-    Event_timer_handler callback, void *data)
+uint32_t event_timer_create(EM *const event_machine, Event_timer *const timer,
+    const Event_timer_handler callback, void *const data)
 {
     if_null (event_machine)
     {
@@ -72,7 +72,7 @@ uint32_t event_timer_create(EM *event_machine, Event_timer *timer,
     return event_machine_add(event_machine, &TIMER_ED(timer));
 }
 
-uint32_t event_timer_start(Event_timer *timer, int32_t msec)
+uint32_t event_timer_start(Event_timer *const timer, const int32_t msec)
 {
     struct itimerspec expiration;
 
@@ -86,7 +86,7 @@ uint32_t event_timer_start(Event_timer *timer, int32_t msec)
     return EM_SUCCESS;
 }
 
-uint32_t event_timer_stop(Event_timer *timer)
+uint32_t event_timer_stop(Event_timer *const timer)
 {
     struct itimerspec expiration;
 
@@ -96,7 +96,7 @@ uint32_t event_timer_stop(Event_timer *timer)
     return EM_SUCCESS;
 }
 
-uint32_t event_timer_destroy(Event_timer *timer)
+uint32_t event_timer_destroy(Event_timer *const timer)
 {
     event_machine_delete(TIMER_EM(timer), TIMER_FD(timer), NULL);
     close(TIMER_FD(timer));
