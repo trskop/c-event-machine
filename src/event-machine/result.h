@@ -38,36 +38,38 @@ extern "C" {
 #endif
 
 enum EM_result {
-    /* Function finished successfully
+    /** Function finished successfully.
      */
     EM_SUCCESS = 0,
 
-    /** Value of epoll_fd, or event timer, or any of break_loop_pipe file
-     * descriptor is invalid.
+    /** Value of <tt>epoll_fd</tt>, or event timer, or any of
+     * <tt>break_loop_pipe</tt> file descriptor is invalid.
      */
     EM_ERROR_BADFD = 2,
 
-    /* Value of max_events entry of Event_machine is invalid.
+    /** Value of <tt>max_events</tt> entry of <tt>Event_machine</tt> is
+     * invalid.
      */
     EM_ERROR_MAX_EVENTS_TOO_SMALL = 3,
 
-    /* Enum or integer value is out of bounds. 
+    /** Enum or integer value is out of bounds.
      */
     EM_ERROR_VALUE_OUT_OF_BOUNDS = 4,
 
-    /* Pointer to Event_machine type was NULL.
+    /** Pointer to <tt>Event_machine</tt> type was <tt>NULL</tt>.
      */
     EM_ERROR_NULL = 8,
 
-    /* Value of epoll_events entry of Event_machine is unexpectedly NULL.
+    /** Value of <tt>epoll_events</tt> entry of <tt>Event_machine</tt> is
+     * unexpectedly <tt>NULL</tt>.
      */
     EM_ERROR_EVENTS_NULL = 8 + 1,
 
-    /* Value of Event_descriptor is NULL.
+    /** Value of Event_descriptor is <tt>NULL</tt>.
      */
     EM_ERROR_DESCRIPTOR_NULL = 8 + 2,
 
-    /* Buffer provided from the outside was NULL.
+    /** Buffer provided from the outside was <tt>NULL</tt>.
      */
     EM_ERROR_BUFFER_NULL = 8 + 3,
 
@@ -75,43 +77,57 @@ enum EM_result {
      */
     EM_ERROR_TIMER_NULL = 8 + 4,
 
-    /** User provided callback function pointer is NULL.
+    /** User provided callback function pointer is <tt>NULL</tt>.
      */
     EM_ERROR_CALLBACK_NULL = 8 + 5,
 
-    /* Calling pipe() or pipe2() failed. See value of errno for details.
+    /** Calling <tt>pipe()</tt> or <tt>pipe2()</tt> failed.
+     *
+     * See value of <tt>errno</tt> for details.
      */
     EM_ERROR_PIPE = 32 + 1,
 
-    /* Calling close() failed. See ERRNO for details.
+    /** Calling <tt>close()</tt> failed.
+     *
+     * See value of <tt>errno</tt> for details.
      */
     EM_ERROR_CLOSE = 32 + 2,
 
-    /* Calling close() failed. See ERRNO for details.
+    /** Calling <tt>read()</tt> failed.
+     *
+     * See value of <tt>errno</tt> for details.
      */
     EM_ERROR_READ = 32 + 3,
 
-    /* Calling close() failed. See ERRNO for details.
+    /** Calling <tt>write()</tt> failed.
+     *
+     * See value of <tt>errno</tt> for details.
      */
     EM_ERROR_WRITE = 32 + 4,
 
-    /* Calling epoll_create() or epoll_create1() failed. See ERRNO for details.
+    /** Calling <tt>epoll_create()</tt> or <tt>epoll_create1()</tt> failed.
+     *
+     * See value of <tt>errno</tt> for details.
      */
     EM_ERROR_EPOLL_CREATE = 32 + 5,
 
-    /* Calling epoll_ctl() failed. See ERRNO for details.
+    /** Calling <tt>epoll_ctl()</tt> failed.
+     *
+     * See value of <tt>errno</tt> for details.
      */
     EM_ERROR_EPOLL_CTL = 32 + 6,
 
-    /* Calling epoll_wait() failed. See ERRNO for details.
+    /** Calling <tt>epoll_wait()</tt> failed.
+     *
+     * See value of <tt>errno</tt> for details.
      */
     EM_ERROR_EPOLL_WAIT = 32 + 7,
 
-    /* Trying to store duplicate event descriptor.
+    /** Trying to store duplicate event descriptor.
      */
     EM_ERROR_STORAGE_DUPLICATE_ENTRY = 64,
 
-    /* Trying to retrieve non existing event descriptor.
+    /** Trying to retrieve non existing event descriptor.
      */
     EM_ERROR_STORAGE_NO_SUCH_ENTRY = 64 + 1
 };
