@@ -3,6 +3,10 @@
 
 #include "event-machine.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct Event_timer_s;
 
 typedef void (*Event_timer_handler)(struct Event_timer_s *timer, void *data);
@@ -25,5 +29,9 @@ void event_timer_start(Event_timer *timer, int32_t msec);
 void event_timer_stop();
 
 void event_timer_destroy(Event_timer *timer);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // EVENT_TIMER_H_37644463622302162596821921420243050348
