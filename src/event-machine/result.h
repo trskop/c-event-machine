@@ -42,8 +42,8 @@ enum EM_result {
      */
     EM_SUCCESS = 0,
 
-    /* Value of epoll_fd or any of break_loop_pipe file descriptors  is
-     * invalid.
+    /** Value of epoll_fd, or event timer, or any of break_loop_pipe file
+     * descriptor is invalid.
      */
     EM_ERROR_BADFD = 2,
 
@@ -71,7 +71,15 @@ enum EM_result {
      */
     EM_ERROR_BUFFER_NULL = 8 + 3,
 
-    /* Calling pipe() or pipe2() failed. See ERRNO for details.
+    /** Provided Event_timer pointer is <tt>NULL</tt>.
+     */
+    EM_ERROR_TIMER_NULL = 8 + 4,
+
+    /** User provided callback function pointer is NULL.
+     */
+    EM_ERROR_CALLBACK_NULL = 8 + 5,
+
+    /* Calling pipe() or pipe2() failed. See value of errno for details.
      */
     EM_ERROR_PIPE = 32 + 1,
 

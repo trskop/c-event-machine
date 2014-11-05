@@ -1,6 +1,7 @@
+#include "event-timer.h"
+#include "event-machine/result-internal.h"
 #include <sys/types.h>
 #include <sys/epoll.h>
-#include "event-timer.h"
 #include <time.h>
 #include <sys/timerfd.h>
 #include <string.h>
@@ -27,17 +28,35 @@ static void event_timer_internal_timeout(EM *em, uint32_t events, int fd, void *
 uint32_t event_timer_create(EM *event_machine, Event_timer *timer,
     Event_timer_handler callback, void *data)
 {
+    if_null (event_machine)
+    {
+        return EM_ERROR_NULL;
+    }
+    if_null (timer)
+    {
+        return EM_ERROR_TIMER_NULL;
+    }
+    if_null (callback)
+    {
+        return EM_ERROR_CALLBACK_NULL;
+    }
+
     timer->event_machine = event_machine;
     timer->data = data;
     timer->callback = callback;
 
-    timer->event_descriptor.fd  = timerfd_create(CLOCK_MONOTONIC, 0);
+    int fd = timerfd_create(CLOCK_MONOTONIC, 0);
+    if_invalid_fd (fd)
+    {
+        return EM_ERROR_BADFD;
+    }
+
+    timer->event_descriptor.fd = fd;
     timer->event_descriptor.events = EPOLLIN;
     timer->event_descriptor.data = timer;
     timer->event_descriptor.handler = event_timer_internal_timeout;
 
-    event_machine_add(event_machine, &timer->event_descriptor);
-    return 0;
+    return event_machine_add(event_machine, &timer->event_descriptor);
 }
 
 
