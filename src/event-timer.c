@@ -1,14 +1,11 @@
 #include "event-timer.h"
 #include "event-machine/result-internal.h"
 #include <assert.h>
-#include <sys/types.h>
-#include <sys/epoll.h>
-#include <time.h>
-#include <sys/timerfd.h>
+#include <errno.h>
 #include <string.h>
+#include <sys/epoll.h>
+#include <sys/timerfd.h>
 #include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
 
 #define TIMER(data) ((Event_timer*)data)
 
@@ -16,6 +13,9 @@ static void event_timer_internal_timeout(EM *em, uint32_t events, int fd,
     void *data)
 {
     uint64_t number_of_timeouts;
+
+    assert(em != NULL);
+    assert(valid_fd(fd));
 
     ssize_t readed = read(fd, &number_of_timeouts, sizeof(uint64_t));
     assert(readed == sizeof(uint64_t));
