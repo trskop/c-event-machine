@@ -26,7 +26,7 @@ uint8_t event_timer_creat(EM *event_machine, Event_timer* timer,
 
 void event_timer_start(Event_timer *timer, int32_t msec);
 
-void event_timer_stop();
+void event_timer_stop(Event_timer *timer);
 
 void event_timer_destroy(Event_timer *timer);
 
