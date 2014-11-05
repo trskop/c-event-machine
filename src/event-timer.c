@@ -9,7 +9,8 @@
 
 #define TIMER(data) ((Event_timer*)data)
 
-static void event_timer_internal_timeout(EM *em, uint32_t events, int fd,
+
+static void internal_timeout_handler(EM *em, uint32_t events, int fd,
     void *data)
 {
     uint64_t number_of_timeouts;
@@ -55,7 +56,7 @@ uint32_t event_timer_create(EM *event_machine, Event_timer *timer,
     timer->event_descriptor.fd = fd;
     timer->event_descriptor.events = EPOLLIN;
     timer->event_descriptor.data = timer;
-    timer->event_descriptor.handler = event_timer_internal_timeout;
+    timer->event_descriptor.handler = internal_timeout_handler;
 
     return event_machine_add(event_machine, &timer->event_descriptor);
 }
