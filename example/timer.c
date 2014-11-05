@@ -62,14 +62,19 @@ int main()
     }
 
     Event_timer timer;
-    if_em_failure (event_timer_create(&em, &timer, timer_timeout, NULL))
+    if (is_em_failure(event_timer_create(&em, &timer, timer_timeout, NULL))
+        || is_em_failure(event_timer_start(&timer, 1500)))
     {
         exit(EXIT_FAILURE);
     }
 
-    event_timer_start(&timer, 1500);
-
     if_em_failure (event_machine_run(&em))
+    {
+        exit(EXIT_FAILURE);
+    }
+
+    if (is_em_failure(event_timer_stop(&timer))
+        || is_em_failure(event_timer_destroy(&timer)))
     {
         exit(EXIT_FAILURE);
     }

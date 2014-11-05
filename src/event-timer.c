@@ -61,7 +61,7 @@ uint32_t event_timer_create(EM *event_machine, Event_timer *timer,
     return event_machine_add(event_machine, &timer->event_descriptor);
 }
 
-void event_timer_start(Event_timer *timer, int32_t msec)
+uint32_t event_timer_start(Event_timer *timer, int32_t msec)
 {
     struct itimerspec expiration;
 
@@ -71,19 +71,25 @@ void event_timer_start(Event_timer *timer, int32_t msec)
     expiration.it_value.tv_nsec = expiration.it_interval.tv_nsec;
 
     timerfd_settime(timer->event_descriptor.fd, 0, &expiration, NULL);
+
+    return EM_SUCCESS;
 }
 
-void event_timer_stop(Event_timer *timer)
+uint32_t event_timer_stop(Event_timer *timer)
 {
     struct itimerspec expiration;
 
     memset(&expiration, 0, sizeof(struct itimerspec));
     timerfd_settime(timer->event_descriptor.fd, 0, &expiration, NULL);
+
+    return EM_SUCCESS;
 }
 
-void event_timer_destroy(Event_timer *timer)
+uint32_t event_timer_destroy(Event_timer *timer)
 {
     event_machine_delete(timer->event_machine, timer->event_descriptor.fd,
         NULL);
     close(timer->event_descriptor.fd);
+
+    return EM_SUCCESS;
 }
