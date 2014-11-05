@@ -79,13 +79,19 @@ uint32_t event_timer_start(Event_timer *const timer, const int32_t msec)
         return EM_ERROR_TIMER_NULL;
     }
 
-    struct itimerspec expiration;
-
-    expiration.it_interval.tv_sec = msec / 1000;
-    expiration.it_interval.tv_nsec = (msec % 1000) * 1000;
-    expiration.it_value.tv_sec = expiration.it_interval.tv_sec;
-    expiration.it_value.tv_nsec = expiration.it_interval.tv_nsec;
-
+    struct itimerspec expiration =
+    {
+        .it_interval =
+        {
+            .tv_sec = msec / 1000,
+            .tv_nsec = (msec % 1000) * 1000
+        },
+        .it_value =
+        {
+            .tv_sec = expiration.it_interval.tv_sec,
+            .tv_nsec = expiration.it_interval.tv_nsec
+        }
+    };
     if_negative (timerfd_settime(TIMER_FD(timer), 0, &expiration, NULL))
     {
         return EM_ERROR_TIMERFD_SETTIME;
@@ -96,14 +102,13 @@ uint32_t event_timer_start(Event_timer *const timer, const int32_t msec)
 
 uint32_t event_timer_stop(Event_timer *const timer)
 {
-    struct itimerspec expiration;
+    struct itimerspec expiration = {{0, 0}, {0, 0}};
 
     if_null (timer)
     {
         return EM_ERROR_TIMER_NULL;
     }
 
-    memset(&expiration, 0, sizeof(struct itimerspec));
     if_negative (timerfd_settime(TIMER_FD(timer), 0, &expiration, NULL))
     {
         return EM_ERROR_TIMERFD_SETTIME;
