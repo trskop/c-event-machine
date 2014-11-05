@@ -20,7 +20,7 @@ static void event_timer_internal_timeout(EM *em, uint32_t events, int fd, void *
     }
     for(int i = 0; i < number_of_timeouts; i++)
     {
-        TIMER(data)->callback(TIMER(data), data);
+        TIMER(data)->callback(TIMER(data), TIMER(data)->data);
     }
 }
 
