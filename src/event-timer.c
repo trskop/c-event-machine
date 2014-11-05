@@ -1,5 +1,6 @@
 #include "event-timer.h"
 #include "event-machine/result-internal.h"
+#include <assert.h>
 #include <sys/types.h>
 #include <sys/epoll.h>
 #include <time.h>
@@ -11,15 +12,15 @@
 
 #define TIMER(data) ((Event_timer*)data)
 
-static void event_timer_internal_timeout(EM *em, uint32_t events, int fd, void *data)
+static void event_timer_internal_timeout(EM *em, uint32_t events, int fd,
+    void *data)
 {
     uint64_t number_of_timeouts;
-    int readed = read(fd, &number_of_timeouts, sizeof(uint64_t));
-    if(readed != sizeof(uint64_t))
-    {
-        fprintf(stderr, "error\n");
-    }
-    for(int i = 0; i < number_of_timeouts; i++)
+
+    ssize_t readed = read(fd, &number_of_timeouts, sizeof(uint64_t));
+    assert(readed == sizeof(uint64_t));
+
+    for(; number_of_timeouts > 0; number_of_timeouts--)
     {
         TIMER(data)->callback(TIMER(data), TIMER(data)->data);
     }
@@ -59,31 +60,29 @@ uint32_t event_timer_create(EM *event_machine, Event_timer *timer,
     return event_machine_add(event_machine, &timer->event_descriptor);
 }
 
-
 void event_timer_start(Event_timer *timer, int32_t msec)
 {
     struct itimerspec expiration;
-    expiration.it_interval.tv_sec = msec/1000;
-    expiration.it_interval.tv_nsec = (msec%1000)*1000;
+
+    expiration.it_interval.tv_sec = msec / 1000;
+    expiration.it_interval.tv_nsec = (msec % 1000) * 1000;
     expiration.it_value.tv_sec = expiration.it_interval.tv_sec;
     expiration.it_value.tv_nsec = expiration.it_interval.tv_nsec;
-
 
     timerfd_settime(timer->event_descriptor.fd, 0, &expiration, NULL);
 }
 
-
 void event_timer_stop(Event_timer *timer)
 {
     struct itimerspec expiration;
-    memset(&expiration, 0, sizeof(struct itimerspec));
 
+    memset(&expiration, 0, sizeof(struct itimerspec));
     timerfd_settime(timer->event_descriptor.fd, 0, &expiration, NULL);
 }
 
 void event_timer_destroy(Event_timer *timer)
 {
-    event_machine_delete(
-                timer->event_machine, timer->event_descriptor.fd, NULL);
+    event_machine_delete(timer->event_machine, timer->event_descriptor.fd,
+        NULL);
     close(timer->event_descriptor.fd);
 }
