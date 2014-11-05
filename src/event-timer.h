@@ -35,7 +35,7 @@ typedef struct Event_timer_s
     Event_timer_handler callback;
 } Event_timer;
 
-uint32_t event_timer_creat(EM *event_machine, Event_timer *timer,
+uint32_t event_timer_create(EM *event_machine, Event_timer *timer,
     Event_timer_handler callback, void *data);
 
 void event_timer_start(Event_timer *timer, int32_t msec);

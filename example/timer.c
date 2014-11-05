@@ -62,7 +62,7 @@ int main()
     }
 
     Event_timer timer;
-    event_timer_creat(&em, &timer, timer_timeout, NULL);
+    event_timer_create(&em, &timer, timer_timeout, NULL);
     event_timer_start(&timer, 1500);
 
     if_em_failure (event_machine_run(&em))
