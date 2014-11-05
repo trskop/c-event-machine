@@ -7,7 +7,16 @@
 #include <sys/timerfd.h>
 #include <unistd.h>
 
-#define TIMER(data) ((Event_timer*)data)
+#define CAST_TIMER(data)        ((Event_timer*)data)
+
+/* Accessor macros for various Event_timer fields. Please use these in case
+ * that its internal structure changes.
+ */
+#define TIMER_FD(timer)         (timer->event_descriptor.fd)
+#define TIMER_EM(timer)         (timer->event_machine)
+#define TIMER_ED(timer)         (timer->event_descriptor)
+#define TIMER_DATA(timer)       (timer->data)
+#define TIMER_CALLBACK(timer)   (timer->callback)
 
 
 static void internal_timeout_handler(EM *em, uint32_t events, int fd,
@@ -23,7 +32,9 @@ static void internal_timeout_handler(EM *em, uint32_t events, int fd,
 
     for(; number_of_timeouts > 0; number_of_timeouts--)
     {
-        TIMER(data)->callback(TIMER(data), TIMER(data)->data);
+        Event_timer *timer = CAST_TIMER(data);
+
+        TIMER_CALLBACK(timer)(timer, TIMER_DATA(timer));
     }
 }
 
@@ -43,9 +54,9 @@ uint32_t event_timer_create(EM *event_machine, Event_timer *timer,
         return EM_ERROR_CALLBACK_NULL;
     }
 
-    timer->event_machine = event_machine;
-    timer->data = data;
-    timer->callback = callback;
+    TIMER_EM(timer) = event_machine;
+    TIMER_DATA(timer) = data;
+    TIMER_CALLBACK(timer) = callback;
 
     int fd = timerfd_create(CLOCK_MONOTONIC, 0);
     if_invalid_fd (fd)
@@ -53,12 +64,12 @@ uint32_t event_timer_create(EM *event_machine, Event_timer *timer,
         return EM_ERROR_BADFD;
     }
 
-    timer->event_descriptor.fd = fd;
-    timer->event_descriptor.events = EPOLLIN;
-    timer->event_descriptor.data = timer;
-    timer->event_descriptor.handler = internal_timeout_handler;
+    TIMER_ED(timer).fd = fd;
+    TIMER_ED(timer).events = EPOLLIN;
+    TIMER_ED(timer).data = timer;
+    TIMER_ED(timer).handler = internal_timeout_handler;
 
-    return event_machine_add(event_machine, &timer->event_descriptor);
+    return event_machine_add(event_machine, &TIMER_ED(timer));
 }
 
 uint32_t event_timer_start(Event_timer *timer, int32_t msec)
@@ -70,7 +81,7 @@ uint32_t event_timer_start(Event_timer *timer, int32_t msec)
     expiration.it_value.tv_sec = expiration.it_interval.tv_sec;
     expiration.it_value.tv_nsec = expiration.it_interval.tv_nsec;
 
-    timerfd_settime(timer->event_descriptor.fd, 0, &expiration, NULL);
+    timerfd_settime(TIMER_FD(timer), 0, &expiration, NULL);
 
     return EM_SUCCESS;
 }
@@ -80,16 +91,15 @@ uint32_t event_timer_stop(Event_timer *timer)
     struct itimerspec expiration;
 
     memset(&expiration, 0, sizeof(struct itimerspec));
-    timerfd_settime(timer->event_descriptor.fd, 0, &expiration, NULL);
+    timerfd_settime(TIMER_FD(timer), 0, &expiration, NULL);
 
     return EM_SUCCESS;
 }
 
 uint32_t event_timer_destroy(Event_timer *timer)
 {
-    event_machine_delete(timer->event_machine, timer->event_descriptor.fd,
-        NULL);
-    close(timer->event_descriptor.fd);
+    event_machine_delete(TIMER_EM(timer), TIMER_FD(timer), NULL);
+    close(TIMER_FD(timer));
 
     return EM_SUCCESS;
 }
