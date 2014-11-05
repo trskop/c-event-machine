@@ -115,6 +115,7 @@ include-path: private INCLUDE_PATH_PREFIX := $(shell pwd)
 include-path:
 	@echo $(addprefix $(INCLUDE_PATH_PREFIX)/,$(INCLUDE_PATH))
 .PHONY: include-path
+NO_DEPS_TARGETS += include-path
 
 clean: clean-objects clean-dependency-files
 .PHONY: clean
