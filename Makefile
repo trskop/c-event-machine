@@ -31,12 +31,16 @@ EXAMPLE_EXECUTABLES = $(subst $(EXAMPLE),$(EXE),$(EXAMPLE_SOURCES:.c=))
 
 # {{{ Command and building flags ##############################################
 
+INCLUDE_PATH = $(SRC_DIR)
+
 CC_OUTPUT_OPTION = -o $@
 CC ?= gcc
 CFLAGS += -Wall -std=c11
 CFLAGS += -g
-CPPFLAGS += -I$(SRC_DIR)
-#TARGET_ARCH
+CPPFLAGS += $(addprefix -I,$(INCLUDE_PATH))
+#LDFLAGS +=
+#TARGET_ARCH +=
+#LDLIBS +=
 
 MK_OUT_DIRS = \
     [ -e '$(dir $@)' ] || \
@@ -51,10 +55,16 @@ $(DEPS)%.deps: $(SRC)%.c
 	@$(MK_OUT_DIRS)
 	$(CC) $(CPPFLAGS) -MM -MT '$(subst $(SRC),$(OUT),$(<:%.c=%.o))' $(CC_OUTPUT_OPTION) $<
 
+$(OUT)%.o: private CFLAGS += -fPIC
 $(OUT)%.o: $(SRC)%.c
 	@$(MK_OUT_DIRS)
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c $(CC_OUTPUT_OPTION) $<
 
+$(LIB)%.so: private CFLAGS += -fPIC
+$(LIB)%.so: private LDFLAGS += -shared
+
+$(EXE)%: private CPPFLAGS += -L$(LIB)
+$(EXE)%: private LDLIBS += -l$(LIB_BASE_NAME)
 $(EXE)%: $(EXAMPLE)%.c
 	@$(MK_OUT_DIRS)
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) $(TARGET_ARCH) $< $(LOADLIBES) $(LDLIBS) $(CC_OUTPUT_OPTION)
@@ -67,8 +77,6 @@ all: build
 build: build-so build-a
 .PHONY: build
 
-build-so: CFLAGS += -fPIC
-build-so: LDFLAGS += -shared
 build-so: $(SO_TARGET)
 .PHONY: build-so
 
@@ -86,13 +94,11 @@ $(A_TARGET): $(OBJECTS)
 examples: build-examples
 .PHONY: examples
 
-build-examples: build build-example-executables
-.PHONY: build-example-executables
-
-build-example-executables: CPPFLAGS += -L$(LIB)
-build-example-executables: LDLIBS += -levent-machine
-build-example-executables: $(EXAMPLE_EXECUTABLES)
+build-examples: $(EXAMPLE_EXECUTABLES)
 .PHONY: build-examples
+
+$(EXAMPLE_EXECUTABLES): $(SO_TARGET)
+#$(EXAMPLE_EXECUTABLES): $(A_TARGET)
 
 install: all
 	install -d $(INSTALL_DIR)/bin/
@@ -104,6 +110,11 @@ install: all
 	install -D src/event-machine.h $(INSTALL_DIR)/include/
 	install -D src/event-machine/result.h $(INSTALL_DIR)/include/event-machine
 .PHONY: install
+
+include-path: private INCLUDE_PATH_PREFIX := $(shell pwd)
+include-path:
+	@echo $(addprefix $(INCLUDE_PATH_PREFIX)/,$(INCLUDE_PATH))
+.PHONY: include-path
 
 clean: clean-objects clean-dependency-files
 .PHONY: clean
