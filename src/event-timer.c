@@ -12,9 +12,9 @@
 
 static void event_timer_internal_timeout(EM *em, uint32_t events, int fd, void *data)
 {
-    u_int64_t number_of_timeouts;
-    int readed = read(fd, &number_of_timeouts, sizeof(u_int64_t));
-    if(readed != sizeof(u_int64_t))
+    uint64_t number_of_timeouts;
+    int readed = read(fd, &number_of_timeouts, sizeof(uint64_t));
+    if(readed != sizeof(uint64_t))
     {
         fprintf(stderr, "error\n");
     }
