@@ -74,6 +74,11 @@ uint32_t event_timer_create(EM *const event_machine, Event_timer *const timer,
 
 uint32_t event_timer_start(Event_timer *const timer, const int32_t msec)
 {
+    if_null (timer)
+    {
+        return EM_ERROR_TIMER_NULL;
+    }
+
     struct itimerspec expiration;
 
     expiration.it_interval.tv_sec = msec / 1000;
@@ -81,7 +86,10 @@ uint32_t event_timer_start(Event_timer *const timer, const int32_t msec)
     expiration.it_value.tv_sec = expiration.it_interval.tv_sec;
     expiration.it_value.tv_nsec = expiration.it_interval.tv_nsec;
 
-    timerfd_settime(TIMER_FD(timer), 0, &expiration, NULL);
+    if_negative (timerfd_settime(TIMER_FD(timer), 0, &expiration, NULL))
+    {
+        return EM_ERROR_TIMERFD_SETTIME;
+    }
 
     return EM_SUCCESS;
 }
@@ -90,16 +98,58 @@ uint32_t event_timer_stop(Event_timer *const timer)
 {
     struct itimerspec expiration;
 
+    if_null (timer)
+    {
+        return EM_ERROR_TIMER_NULL;
+    }
+
     memset(&expiration, 0, sizeof(struct itimerspec));
-    timerfd_settime(TIMER_FD(timer), 0, &expiration, NULL);
+    if_negative (timerfd_settime(TIMER_FD(timer), 0, &expiration, NULL))
+    {
+        return EM_ERROR_TIMERFD_SETTIME;
+    }
 
     return EM_SUCCESS;
 }
 
 uint32_t event_timer_destroy(Event_timer *const timer)
 {
-    event_machine_delete(TIMER_EM(timer), TIMER_FD(timer), NULL);
-    close(TIMER_FD(timer));
+    if_null (timer)
+    {
+        return EM_ERROR_TIMER_NULL;
+    }
+
+    /* Last argument to event_machine_delete() is NULL since Event_descriptor
+     * is part of Event_timer data structure it doesn't make sense to request
+     * pointer to it.
+     */
+    int ret = event_machine_delete(TIMER_EM(timer), TIMER_FD(timer), NULL);
+    if_em_failure (ret)
+    {
+        int saved_errno = errno;
+
+        /* If close() fails then its errno is ignored. At this point error
+         * returned by event_machine_delete() has more priority.
+         */
+        close(TIMER_FD(timer));
+        errno = saved_errno;
+
+        return ret;
+    }
+
+    if_negative (close(TIMER_FD(timer)))
+    {
+        return EM_ERROR_CLOSE;
+    }
+
+    /* Make sure that all information stored in Event_timer structure are lost.
+     * Since most of the entries are pointers this is the simplest way, but it
+     * is good practice to set file descriptors to -1,  because its an invalid
+     * value.
+     */
+    memset(timer, 0, sizeof(Event_timer));
+    TIMER_FD(timer) = -1;
+    TIMER_ED(timer).fd = -1;
 
     return EM_SUCCESS;
 }
