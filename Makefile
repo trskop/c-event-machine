@@ -105,7 +105,6 @@ install: all
 	install -D src/event-machine/result.h $(INSTALL_DIR)/include/event-machine
 .PHONY: install
 
-include-path: private INCLUDE_PATH_PREFIX := $(shell pwd)
 include-path:
 	@echo $(addprefix $(PWD)/,$(INCLUDE_PATH))
 .PHONY: include-path
