@@ -40,6 +40,16 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 
+#define BREAK_LOOP_ED(em)       (em->break_loop_event_descriptor)
+#define BREAK_LOOP_PIPE(em)     (em->break_loop_pipe)
+#define BREAK_LOOP_READ(em)     (BREAK_LOOP_PIPE(em)[0])
+#define BREAK_LOOP_WRITE(em)    (BREAK_LOOP_PIPE(em)[1])
+
+#define STORAGE_INSERT(em)                  (em->descriptor_storage.insert)
+#define STORAGE_INSERT_ENTRY(em, fd, ptr)   (STORAGE_INSERT(em)(fd, ptr))
+#define STORAGE_REMOVE(em)                  (em->descriptor_storage.remove)
+#define STORAGE_REMOVE_ENTRY(em, fd, ptr)   (STORAGE_REMOVE(em)(fd, ptr))
+
 
 enum EM_result event_machine_init(EM *em)
 {
@@ -82,7 +92,7 @@ enum EM_result event_machine_init(EM *em)
      * XXX: To get rid of _GNU_SOURCE declaration we would need to switch to
      *      "pipe() + 2 * fcntl()".
      */
-    if_not_zero (pipe2(em->break_loop_pipe, O_CLOEXEC | O_NONBLOCK))
+    if_not_zero (pipe2(BREAK_LOOP_PIPE(em), O_CLOEXEC | O_NONBLOCK))
     {
         return EM_ERROR_PIPE;
     }
@@ -93,14 +103,14 @@ enum EM_result event_machine_init(EM *em)
      * write end is used by event_machine_terminate() to send the
      * notification.
      */
-    em->break_loop_event_descriptor.events = EPOLLIN;
-    em->break_loop_event_descriptor.fd = em->break_loop_pipe[0];
+    BREAK_LOOP_ED(em).events = EPOLLIN;
+    BREAK_LOOP_ED(em).fd = BREAK_LOOP_READ(em);
 
     /* This event is handled internally so there is no need for spplying
      * private data or even event handler.
      */
-    em->break_loop_event_descriptor.data = NULL;
-    em->break_loop_event_descriptor.handler = NULL;
+    BREAK_LOOP_ED(em).data = NULL;
+    BREAK_LOOP_ED(em).handler = NULL;
 
     /* Function epoll_create1() was introduced in Linux kernel 2.6.27 and glibc
      * support was added in version 2.9.
@@ -113,10 +123,10 @@ enum EM_result event_machine_init(EM *em)
     em->epoll_fd = epoll_fd;
 
     struct epoll_event event =
-        { .events = em->break_loop_event_descriptor.events
-        , .data.ptr = &(em->break_loop_event_descriptor)
+        { .events = BREAK_LOOP_ED(em).events
+        , .data.ptr = &(BREAK_LOOP_ED(em))
         };
-    if_not_zero (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, em->break_loop_pipe[0],
+    if_not_zero (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, BREAK_LOOP_READ(em),
         &event))
     {
         return EM_ERROR_EPOLL_CTL;
@@ -160,22 +170,22 @@ enum EM_result event_machine_destroy(EM *em)
     /* Closing write end of break loop pipe first to make sure that writing in
      * to it would fail.
      */
-    if_valid_fd (em->break_loop_pipe[1])
+    if_valid_fd (BREAK_LOOP_WRITE(em))
     {
-        if_not_zero (close(em->break_loop_pipe[1]))
+        if_not_zero (close(BREAK_LOOP_WRITE(em)))
         {
             return EM_ERROR_CLOSE;
         }
-        em->break_loop_pipe[1] = -1;
+        BREAK_LOOP_WRITE(em) = -1;
     }
 
-    if_valid_fd (em->break_loop_pipe[0])
+    if_valid_fd (BREAK_LOOP_READ(em))
     {
-        if_not_zero (close(em->break_loop_pipe[0]))
+        if_not_zero (close(BREAK_LOOP_READ(em)))
         {
             return EM_ERROR_CLOSE;
         }
-        em->break_loop_pipe[0] = -1;
+        BREAK_LOOP_READ(em) = -1;
     }
 
     return EM_SUCCESS;
@@ -322,30 +332,19 @@ enum EM_result event_machine_add(EM *em, EM_event_descriptor *ed)
         return EM_ERROR_EPOLL_CTL;
     }
 
-    if (em->descriptor_storage.insert != NULL)
+    if_not_null (STORAGE_INSERT(em))
     {
-        return em->descriptor_storage.insert(ed->fd, ed);
+        return STORAGE_INSERT_ENTRY(em, ed->fd, ed);
     }
 
     return EM_SUCCESS;
 }
 
-/* TODO: "EM_event_descriptor **ed" argument is currently not used, but in the
- * future it should return pointer to EM_event_descriptor structure that was
- * associated with specified file descriptor.
- *
- * Interface such as this would allow leaving it for caller to deallocate
- * unused memory.
- */
 enum EM_result event_machine_delete(EM *em, int fd, EM_event_descriptor **ed)
 {
     if_null (em)
     {
         return EM_ERROR_NULL;
-    }
-    if_null (ed)
-    {
-        return EM_ERROR_DESCRIPTOR_NULL;
     }
 
     /* It doesn't make sense to try to remove file descriptor if it's invalid
@@ -382,9 +381,9 @@ enum EM_result event_machine_delete(EM *em, int fd, EM_event_descriptor **ed)
      * new descriptor entry for the same event descriptor, otherwise
      * event_machine_modify() would be unusable. 
      */
-    if (not_null(ed) && not_null(em->descriptor_storage.remove))
+    if (not_null(ed) && not_null(STORAGE_REMOVE(em)))
     {
-        return em->descriptor_storage.remove(fd, ed);
+        return STORAGE_REMOVE_ENTRY(em, fd, ed);
     }
 
     return EM_SUCCESS;
@@ -396,11 +395,6 @@ enum EM_result event_machine_modify(EM *em, int fd, EM_event_descriptor *ed,
     if_null (em)
     {
         return EM_ERROR_NULL;
-    }
-
-    if_null (ed)
-    {
-        return EM_ERROR_DESCRIPTOR_NULL;
     }
 
     /* It doesn't make sense to try to modify file descriptor if it's invalid
@@ -424,15 +418,15 @@ enum EM_result event_machine_modify(EM *em, int fd, EM_event_descriptor *ed,
         return EM_ERROR_EPOLL_CTL;
     }
 
-    if (not_null(old_ed) && not_null(em->descriptor_storage.remove))
+    if (not_null(old_ed) && not_null(STORAGE_REMOVE(em)))
     {
         enum EM_result ret;
-        ret_em_failure_of (ret, em->descriptor_storage.remove(fd, old_ed));
+        ret_em_failure_of (ret, STORAGE_REMOVE_ENTRY(em, fd, old_ed));
     }
 
-    if_not_null (em->descriptor_storage.insert)
+    if_not_null (STORAGE_INSERT(em))
     {
-        return em->descriptor_storage.insert(fd, ed);
+        return STORAGE_INSERT_ENTRY(em, fd, ed);
     }
 
     return EM_SUCCESS;
