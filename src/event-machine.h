@@ -44,51 +44,62 @@ extern "C" {
 
 #define EM_DEFAULT_MAX_EVENTS   4096
 
-/* Forward declaration */
-struct EM_s;
+struct EM_s;    /* Forward declaration */
 
 typedef void (*EM_event_handler)(struct EM_s *, uint32_t, int, void *);
 
 typedef struct
 {
-    /* Events as passed to epoll_ctl(). Do not confuse them with events that
+    /** Events as passed to epoll_ctl(). Do not confuse them with events that
      * actually occurred.
      */
     uint32_t events;
 
-    /* File descriptor registered with epoll_ctl(). It is also used as an index
-     * for storing pointers to EM_event_descriptor structures.
+    /** File descriptor registered with epoll_ctl(). It is also used as an
+     * index for storing pointers to EM_event_descriptor structures.
      */
     int fd;
 
-    /* Private user data are be passed to event handler as is.
+    /** Private user data are be passed to event handler as is.
+     *
+     * Value may be <tt>NULL</tt>
      */
     void *data;
 
-    /* Event handler invoked when any registered event occures.
+    /** Event handler invoked when any registered event occures.
      */
     EM_event_handler handler;
 } EM_event_descriptor;
 
 typedef struct
 {
-    /* Function called by event_machine_add() and event_machine_modify() when
-     * registering event descriptor.
+    /** Function called by <tt>event_machine_add()</tt> and
+     * <tt>event_machine_modify()</tt> when registering event descriptor.
      *
-     * If this field is NULL then event descriptors aren't stored.
+     * If this field is <tt>NULL</tt> then event descriptors aren't stored.
      */
     enum EM_result (*insert)(int, EM_event_descriptor *);
 
-    /* Function called by event_machine_delete() and event_machine_modify()
-     * when event descriptor is being unregistered.
+    /** Function called by <tt>event_machine_delete()</tt> and
+     * <tt>event_machine_modify()</tt> when event descriptor is being
+     * unregistered.
+     *
+     * If this field is <tt>NULL</tt>, then event descriptors can't be
+     * retrieved again. It is perfectly find to define <tt>insert</tt>, but not
+     * <tt>remove</tt>.
      */
     enum EM_result (*remove)(int, EM_event_descriptor **);
 
-    /* Size of private data. See data field documentation for details.
+    /** Size of private data. See data field documentation for details.
+     *
+     * If value of <tt>data = NULL</tt> then this value should be set to 0.
      */
     size_t data_size;
 
-    /* Private data of specific descriptor storage implementation.
+    /** Private data of specific descriptor storage implementation.
+     *
+     * Value may be <tt>NULL</tt>, but note that <tt>data_size = 0</tt> in that
+     * case.
      */
     void *data;
 } EM_descriptor_storage;
@@ -97,80 +108,86 @@ typedef struct EM_s
 {
     int epoll_fd;
 
-    /* Pipe used for breaking main processing loop in which epoll_wait() is
-     * invoked followed by event processing. See event_machine_run() for
-     * details.
+    /** Pipe used for breaking main processing loop in which
+     * <tt>epoll_wait()</tt> is invoked followed by event processing. See
+     * <tt>event_machine_run()</tt> for details.
      */
     int break_loop_pipe[2];
 
-    /* Event descriptor used for registering read end of pipe used for
+    /** Event descriptor used for registering read end of pipe used for
      * breaking main processing loop.
      */
     EM_event_descriptor break_loop_event_descriptor;
 
-    /* Function epoll_wait() returns batch of events that occurred. This
-     * variable limits maximum number of events processed in one batch and also
-     * size of epoll_events array used for storing epoll_wait() results.
+    /** Function <tt>epoll_wait()</tt> returns batch of events that occurred.
+     * This variable limits maximum number of events processed in one batch and
+     * also size of <tt>epoll_events</tt> array used for storing
+     * <tt>epoll_wait()</tt> results.
      */
     int max_events;
 
-    /* Array used for storing events returned by epoll_wait() function. See
-     * also max_events and do_free_epoll_events entries.
+    /** Array used for storing events returned by <tt>epoll_wait()</tt>
+     * function. See also <tt>max_events</tt> and <tt>do_free_epoll_events</tt>
+     * entries.
      */
     struct epoll_event *epoll_events;
 
-    /* Set to true if epoll_events array was allocated in event_machine_init()
-     * and false otherwise.
+    /** Set to true if <tt>epoll_events</tt> array was allocated in
+     * <tt>event_machine_init()</tt> and false otherwise.
      */
     bool do_free_epoll_events;
 
     EM_descriptor_storage descriptor_storage;
 } EM;
 
-/* Initialize EM structure.
+/** Initialize EM structure.
  *
  * Usage example without user supplied buffer:
  *
- *    // Value EM_DEFAULT_MAX_EVENTS is defined in "event-machine.h".
- *    struct epoll_event epoll_events[EM_DEFAULT_MAX_EVENTS];
- *    EM em = EM_WITH_MAX_EVENTS(EM_DEFAULT_MAX_EVENTS, epoll_events);
+ * @code{.c}
+ * // Value EM_DEFAULT_MAX_EVENTS is defined in "event-machine.h".
+ * struct epoll_event epoll_events[EM_DEFAULT_MAX_EVENTS];
+ * EM em = EM_WITH_MAX_EVENTS(EM_DEFAULT_MAX_EVENTS, epoll_events);
  *
- *    if_em_failure (event_machine_init(&em))
- *    {
- *        // Error handling.
- *    }
- *    // ...
+ * if_em_failure (event_machine_init(&em))
+ * {
+ *     // Error handling.
+ * }
+ * // ...
+ * @endcode
  *
  * Usage exampe without user supplied buffer:
  *
- *    EM em = EM_WITH_MAX_EVENTS(EM_DEFAULT_MAX_EVENTS, NULL);
- *    // Same result can be achieved by:
- *    // EM em = EM_DEFAULT;
+ * @code{.c}
+ * EM em = EM_WITH_MAX_EVENTS(EM_DEFAULT_MAX_EVENTS, NULL);
+ * // Same result can be achieved by:
+ * // EM em = EM_DEFAULT;
  *
- *    // Function event_machine_init() will allocate array for storing struct
- *    // epoll_event. Don't forget to call event_machine_destroy() which frees
- *    // that array.
- *    if_em_failure (event_machine_init(&em))
- *    {
- *        // Error handling.
- *    }
- *    // ...
+ * // Function event_machine_init() will allocate array for storing struct
+ * // epoll_event. Don't forget to call event_machine_destroy() which frees
+ * // that array.
+ * if_em_failure (event_machine_init(&em))
+ * {
+ *     // Error handling.
+ * }
+ * // ...
+ * @endcode
  */
 enum EM_result event_machine_init(EM *);
 
-/* Cleanup any resources associated with EM structure.
+/** Cleanup any resources associated with <tt>EM</tt> structure.
  */
 enum EM_result event_machine_destroy(EM *);
 
-/* Start Event Machine main loop.
+/** Start Event Machine main loop.
  */
 enum EM_result event_machine_run(EM *);
 
-/* Notify Event Machine to break main loop as soon as possible.
+/** Notify Event Machine to break main loop as soon as possible.
  */
 enum EM_result event_machine_terminate(EM *);
 
-/* Register file descriptor for specified event with its associated data and
+/** Register file descriptor for specified event with its associated data and
  * handler.
  *
  * Do not ever modify event descriptor structure after it was passed to
@@ -179,24 +196,26 @@ enum EM_result event_machine_terminate(EM *);
  *
  * Usage example:
  *
- *    // ...
- *    EM_event_descriptor ed =
- *    {
- *      .events = EPOLLIN | EPOLLOUT,
- *      .fd = some_fd,
- *      .data = pointer_to_some_private_data,
- *      .handler = pointer_to_event_handling_function
- *    };
+ * @code{.c}
+ * // ...
+ * EM_event_descriptor ed =
+ * {
+ *   .events = EPOLLIN | EPOLLOUT,
+ *   .fd = some_fd,
+ *   .data = pointer_to_some_private_data,
+ *   .handler = pointer_to_event_handling_function
+ * };
  *
- *    if_em_failure (event_machine_add(em, &ed)
- *    {
- *        // Error handling.
- *    }
- *    // ...
+ * if_em_failure (event_machine_add(em, &ed)
+ * {
+ *     // Error handling.
+ * }
+ * // ...
+ * @endcode
  */
 enum EM_result event_machine_add(EM *, EM_event_descriptor *);
 
-/* Unregister file descriptor.
+/** Unregister file descriptor.
  *
  * If descriptor storage is initialized then this function returns
  * EM_event_descriptor associated with specified file descriptor. It's the same
@@ -211,7 +230,7 @@ enum EM_result event_machine_add(EM *, EM_event_descriptor *);
  */
 enum EM_result event_machine_delete(EM *, int, EM_event_descriptor **);
 
-/* Similar as calling event_machine_delete() followed by event_machine_add(),
+/** Similar as calling event_machine_delete() followed by event_machine_add(),
  * but uses only one epoll_ctl() call.
  *
  * Event descriptor passed to this function should be different from the one
@@ -219,23 +238,32 @@ enum EM_result event_machine_delete(EM *, int, EM_event_descriptor **);
  * changed while it is registered. Function returns event descriptor that was
  * used during event_machine_add() call as does event_machine_delete(). See
  * event_machine_delete() for details.
+ *
+ * @param[in] em
+ * @param[in] fd
+ * @param[in] ed
+ * @param[out] old_ed
+ *
+ * @return
  */
-enum EM_result event_machine_modify(EM *, int, EM_event_descriptor *,
-    EM_event_descriptor **);
+enum EM_result event_machine_modify(EM *em, int fd, EM_event_descriptor *ed,
+    EM_event_descriptor **old_ed);
 
-/* Statically set user specified entries of EM structure.
+/** Statically set user specified entries of EM structure.
  *
  * Usage example:
  *
- *    struct epoll_event epoll_events[SOME_SIZE];
- *    EM em = EM_STATIC_WITH_MAX_EVENTS(SOME_SIZE, epoll_events);
- *    // ...
+ * @code{.c}
+ * struct epoll_event epoll_events[SOME_SIZE];
+ * EM em = EM_STATIC_WITH_MAX_EVENTS(SOME_SIZE, epoll_events);
+ * // ...
  *
- *    if_em_failure (event_machine_init(&em))
- *    {
- *        // Error handling.
- *    }
- *    // ...
+ * if_em_failure (event_machine_init(&em))
+ * {
+ *     // Error handling.
+ * }
+ * // ...
+ * @endcode
  */
 #define EM_STATIC_WITH_MAX_EVENTS(maxevs, evs)  \
     { .epoll_fd = -1                            \
@@ -256,22 +284,24 @@ enum EM_result event_machine_modify(EM *, int, EM_event_descriptor *,
         }                                       \
     }
 
-/* Statically set user specified entries of EM structure to their default
+/** Statically set user specified entries of EM structure to their default
  * values.
  *
  * Usage example:
  *
- *    EM em = EM_STATIC_DEFAULT;
- *    // ...
+ * @code{.c}
+ * EM em = EM_STATIC_DEFAULT;
+ * // ...
  *
- *    // Function event_machine_init() will allocate array for storing struct
- *    // epoll_event. Don't forget to call event_machine_destroy() which frees
- *    // that array.
- *    if_em_failure (event_machine_init(&em))
- *    {
- *        // Error handling.
- *    }
- *    // ...
+ * // Function event_machine_init() will allocate array for storing struct
+ * // epoll_event. Don't forget to call event_machine_destroy() which frees
+ * // that array.
+ * if_em_failure (event_machine_init(&em))
+ * {
+ *     // Error handling.
+ * }
+ * // ...
+ * @endcode{.c}
  */
 #define EM_STATIC_DEFAULT   \
     EM_STATIC_WITH_MAX_EVENTS(EM_DEFAULT_MAX_EVENTS, NULL)
