@@ -78,7 +78,7 @@ typedef struct
      *
      * If this field is <tt>NULL</tt> then event descriptors aren't stored.
      */
-    enum EM_result (*insert)(int, EM_event_descriptor *);
+    uint32_t (*insert)(int, EM_event_descriptor *);
 
     /** Function called by <tt>event_machine_delete()</tt> and
      * <tt>event_machine_modify()</tt> when event descriptor is being
@@ -88,7 +88,7 @@ typedef struct
      * retrieved again. It is perfectly find to define <tt>insert</tt>, but not
      * <tt>remove</tt>.
      */
-    enum EM_result (*remove)(int, EM_event_descriptor **);
+    uint32_t (*remove)(int, EM_event_descriptor **);
 
     /** Size of private data. See data field documentation for details.
      *
@@ -173,19 +173,19 @@ typedef struct EM_s
  * // ...
  * @endcode
  */
-enum EM_result event_machine_init(EM *);
+uint32_t event_machine_init(EM *event_machine);
 
 /** Cleanup any resources associated with <tt>EM</tt> structure.
  */
-enum EM_result event_machine_destroy(EM *);
+uint32_t event_machine_destroy(EM *event_machine);
 
 /** Start Event Machine main loop.
  */
-enum EM_result event_machine_run(EM *);
+uint32_t event_machine_run(EM *event_machine);
 
 /** Notify Event Machine to break main loop as soon as possible.
  */
-enum EM_result event_machine_terminate(EM *);
+uint32_t event_machine_terminate(EM *event_machine);
 
 /** Register file descriptor for specified event with its associated data and
  * handler.
@@ -213,7 +213,7 @@ enum EM_result event_machine_terminate(EM *);
  * // ...
  * @endcode
  */
-enum EM_result event_machine_add(EM *, EM_event_descriptor *);
+uint32_t event_machine_add(EM *, EM_event_descriptor *);
 
 /** Unregister file descriptor.
  *
@@ -228,7 +228,8 @@ enum EM_result event_machine_add(EM *, EM_event_descriptor *);
  * In case that descriptor storage is not initialized it always returns NULL if
  * caller supplies non-NULL pointer.
  */
-enum EM_result event_machine_delete(EM *, int, EM_event_descriptor **);
+uint32_t event_machine_delete(EM *event_machine, int fd,
+    EM_event_descriptor **old_event_descriptor);
 
 /** Similar as calling event_machine_delete() followed by event_machine_add(),
  * but uses only one epoll_ctl() call.
@@ -239,15 +240,16 @@ enum EM_result event_machine_delete(EM *, int, EM_event_descriptor **);
  * used during event_machine_add() call as does event_machine_delete(). See
  * event_machine_delete() for details.
  *
- * @param[in] em
+ * @param[in] event_machine
  * @param[in] fd
- * @param[in] ed
- * @param[out] old_ed
+ * @param[in] event_descriptor
+ * @param[out] old_event_descriptor
  *
  * @return
  */
-enum EM_result event_machine_modify(EM *em, int fd, EM_event_descriptor *ed,
-    EM_event_descriptor **old_ed);
+uint32_t event_machine_modify(EM *event_machine, int fd,
+    EM_event_descriptor *event_descriptor,
+    EM_event_descriptor **old_event_descriptor);
 
 /** Statically set user specified entries of EM structure.
  *

@@ -51,7 +51,7 @@
 #define STORAGE_REMOVE_ENTRY(em, fd, ptr)   (STORAGE_REMOVE(em)(fd, ptr))
 
 
-enum EM_result event_machine_init(EM *em)
+uint32_t event_machine_init(EM *const em)
 {
     if_null (em)
     {
@@ -135,7 +135,7 @@ enum EM_result event_machine_init(EM *em)
     return EM_SUCCESS;
 }
 
-enum EM_result event_machine_destroy(EM *em)
+uint32_t event_machine_destroy(EM *const em)
 {
     if_null (em)
     {
@@ -191,9 +191,9 @@ enum EM_result event_machine_destroy(EM *em)
     return EM_SUCCESS;
 }
 
-static inline enum EM_result event_machine_run_once(EM *em,
-    int epoll_fd, struct epoll_event epoll_events[], int max_events,
-    int break_loop_read_fd, bool *break_loop)
+static inline uint32_t event_machine_run_once(EM *const em,
+    const int epoll_fd, struct epoll_event epoll_events[], const int max_events,
+    const int break_loop_read_fd, bool *const break_loop)
 {
     int num_events = epoll_wait(epoll_fd, epoll_events, max_events, -1);
     if_negative (num_events)
@@ -228,7 +228,7 @@ static inline enum EM_result event_machine_run_once(EM *em,
     return EM_SUCCESS;
 }
 
-enum EM_result event_machine_run(EM *em)
+uint32_t event_machine_run(EM *const em)
 {
     if_null (em)
     {
@@ -254,7 +254,7 @@ enum EM_result event_machine_run(EM *em)
 
     for (bool break_loop = false; not(break_loop); )
     {
-        enum EM_result ret =
+        uint32_t ret =
             event_machine_run_once(em, em->epoll_fd, em->epoll_events,
                 em->max_events, em->break_loop_pipe[0], &break_loop);
         if_em_failure (ret)
@@ -266,7 +266,7 @@ enum EM_result event_machine_run(EM *em)
     return EM_SUCCESS;
 }
 
-enum EM_result event_machine_terminate(EM *em)
+uint32_t event_machine_terminate(EM *const em)
 {
     if_null (em)
     {
@@ -301,7 +301,7 @@ enum EM_result event_machine_terminate(EM *em)
     return EM_SUCCESS;
 }
 
-enum EM_result event_machine_add(EM *em, EM_event_descriptor *ed)
+uint32_t event_machine_add(EM *const em, EM_event_descriptor *const ed)
 {
     if_null (em)
     {
@@ -355,7 +355,8 @@ enum EM_result event_machine_add(EM *em, EM_event_descriptor *ed)
     return EM_SUCCESS;
 }
 
-enum EM_result event_machine_delete(EM *em, int fd, EM_event_descriptor **ed)
+uint32_t event_machine_delete(EM *const em, const int fd,
+    EM_event_descriptor **ed)
 {
     if_null (em)
     {
@@ -406,8 +407,8 @@ enum EM_result event_machine_delete(EM *em, int fd, EM_event_descriptor **ed)
     return EM_SUCCESS;
 }
 
-enum EM_result event_machine_modify(EM *em, int fd, EM_event_descriptor *ed,
-    EM_event_descriptor **old_ed)
+uint32_t event_machine_modify(EM *const em, const int fd,
+    EM_event_descriptor *const ed, EM_event_descriptor **old_ed)
 {
     if_null (em)
     {
