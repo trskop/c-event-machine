@@ -359,8 +359,51 @@ uint32_t event_machine_add(EM *const em, EM_event_descriptor *const ed)
     return EM_SUCCESS;
 }
 
+static uint32_t remove_event_descriptor(EM *const em, const int fd,
+    EM_event_descriptor **old_ed)
+{
+    uint32_t ret = EM_SUCCESS;
+
+    assert(em != NULL);
+    assert(valid_fd(fd));
+
+    /* Lookup EM_event_descriptor entry associated with fd and return it unless
+     * user supplied NULL in which case it is not returned.
+     *
+     * If em->descriptor_storage.remove is NULL, then either there is no
+     * descriptor storage supplied or it doesn't support removing elements.
+     * There is perfectly valid (and reasonable) implementation that doesn't
+     * support remove. There is however one limitation to such implementation.
+     * It may not report EM_ERROR_STORAGE_DUPLICATE_ENTRY when trying to insert
+     * new descriptor entry for the same event descriptor, otherwise
+     * event_machine_modify() would be unusable.
+     */
+    if_not_null (STORAGE_REMOVE(em))
+    {
+        EM_event_descriptor *tmp_ed = NULL;
+
+        ret = STORAGE_REMOVE_ENTRY(em, fd, &tmp_ed);
+
+        /* This way remove function doesn't have to handle NULL pointer and can
+         * safely assume that it gets valid storage buffer for event
+         * descriptor.
+         *
+         * Remove function may fail, but it also might return pointer to event
+         * descriptor it removed, or tried to remove. We have to handle such
+         * case by passing event descriptor pointer before processing its
+         * return value.
+         */
+        if (not_null(tmp_ed) && not_null(old_ed))
+        {
+            (*old_ed) = tmp_ed;
+        }
+    }
+
+    return ret;
+}
+
 uint32_t event_machine_delete(EM *const em, const int fd,
-    EM_event_descriptor **ed)
+    EM_event_descriptor **old_ed)
 {
     if_null (em)
     {
@@ -392,28 +435,14 @@ uint32_t event_machine_delete(EM *const em, const int fd,
         return EM_ERROR_EPOLL_CTL;
     }
 
-    /* Lookup EM_event_descriptor entry associated with fd and return it,
-     * unless user supplies NULL, then just skip this step.
-     *
-     * If em->descriptor_storage.remove is NULL, then either there is no
-     * descriptor storage supplied or it doesn't support removing elements.
-     * There is perfectly valid (and reasonable) implementation that doesn't
-     * support remove. There is however one limitation to such implementation.
-     * It may not report EM_ERROR_STORAGE_DUPLICATE_ENTRY when trying to insert
-     * new descriptor entry for the same event descriptor, otherwise
-     * event_machine_modify() would be unusable. 
-     */
-    if (not_null(ed) && not_null(STORAGE_REMOVE(em)))
-    {
-        return STORAGE_REMOVE_ENTRY(em, fd, ed);
-    }
-
-    return EM_SUCCESS;
+    return remove_event_descriptor(em, fd, old_ed);
 }
 
 uint32_t event_machine_modify(EM *const em, const int fd,
     EM_event_descriptor *const ed, EM_event_descriptor **old_ed)
 {
+    uint32_t ret = EM_SUCCESS;
+
     if_null (em)
     {
         return EM_ERROR_NULL;
@@ -441,16 +470,11 @@ uint32_t event_machine_modify(EM *const em, const int fd,
         return EM_ERROR_EPOLL_CTL;
     }
 
-    if (not_null(old_ed) && not_null(STORAGE_REMOVE(em)))
-    {
-        enum EM_result ret;
-        ret_em_failure_of (ret, STORAGE_REMOVE_ENTRY(em, fd, old_ed));
-    }
-
+    ret_em_failure_of(ret, remove_event_descriptor(em, fd, old_ed));
     if_not_null (STORAGE_INSERT(em))
     {
         return STORAGE_INSERT_ENTRY(em, fd, ed);
     }
 
-    return EM_SUCCESS;
+    return ret;
 }
