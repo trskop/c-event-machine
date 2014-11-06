@@ -318,6 +318,8 @@ enum EM_result event_machine_add(EM *em, EM_event_descriptor *ed)
      */
     if (invalid_fd(em->epoll_fd) || invalid_fd(ed->fd))
     {
+        errno = EBADF;
+
         return EM_ERROR_BADFD;
     }
     if (is_negative(fcntl(em->epoll_fd, F_GETFL, 0))
@@ -329,7 +331,20 @@ enum EM_result event_machine_add(EM *em, EM_event_descriptor *ed)
     struct epoll_event ev = {.events = ed->events, .data.ptr = ed};
     if_not_zero (epoll_ctl(em->epoll_fd, EPOLL_CTL_ADD, ed->fd, &ev))
     {
-        return EM_ERROR_EPOLL_CTL;
+        if (errno != EEXIST)
+        {
+            return EM_ERROR_EPOLL_CTL;
+        }
+
+        /* It is either trying to add file descriptor that is already there or
+         * it encountered kernel bug when using file descriptor that was
+         * dup()-ed. Calling epoll_ctl() with EPOLL_CTL_MOD may succeed in such
+         * case.
+         */
+        if_not_zero (epoll_ctl(em->epoll_fd, EPOLL_CTL_MOD, ed->fd, &ev))
+        {
+            return EM_ERROR_EPOLL_CTL;
+        }
     }
 
     if_not_null (STORAGE_INSERT(em))
@@ -353,6 +368,8 @@ enum EM_result event_machine_delete(EM *em, int fd, EM_event_descriptor **ed)
      */
     if (invalid_fd(em->epoll_fd) || invalid_fd(fd))
     {
+        errno = EBADF;
+
         return EM_ERROR_BADFD;
     }
     if (is_negative(fcntl(em->epoll_fd, F_GETFL, 0))
@@ -403,9 +420,10 @@ enum EM_result event_machine_modify(EM *em, int fd, EM_event_descriptor *ed,
      */
     if (invalid_fd(em->epoll_fd) || invalid_fd(fd))
     {
+        errno = EBADF;
+
         return EM_ERROR_BADFD;
     }
-
     if (is_negative(fcntl(em->epoll_fd, F_GETFL, 0))
         || is_negative(fcntl(fd, F_GETFL, 0)))
     {
