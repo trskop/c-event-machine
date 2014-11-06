@@ -195,7 +195,11 @@ static inline uint32_t event_machine_run_once(EM *const em,
     const int epoll_fd, struct epoll_event epoll_events[], const int max_events,
     const int break_loop_read_fd, bool *const break_loop)
 {
-    int num_events = epoll_wait(epoll_fd, epoll_events, max_events, -1);
+    assert(em != NULL);
+    assert(valid_fd(epoll_fd));
+    assert(valid_fd(break_loop_read_fd));
+
+    const int num_events = epoll_wait(epoll_fd, epoll_events, max_events, -1);
     if_negative (num_events)
     {
         return EM_ERROR_EPOLL_WAIT;
