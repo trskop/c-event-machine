@@ -28,6 +28,13 @@ static void internal_timeout_handler(EM *const em, const uint32_t events,
     assert(valid_fd(fd));
 
     ssize_t readed = read(fd, &number_of_timeouts, sizeof(uint64_t));
+    if (readed != sizeof(uint64_t) && errno == EAGAIN)
+    {
+        /* Since timer file descriptor is registered as level triggered, then
+         * we can safely retry later.
+         */
+        return;
+    }
     assert(readed == sizeof(uint64_t));
 
     for(; number_of_timeouts > 0; number_of_timeouts--)
@@ -58,7 +65,7 @@ uint32_t event_timer_create(EM *const event_machine, Event_timer *const timer,
     TIMER_DATA(timer) = data;
     TIMER_CALLBACK(timer) = callback;
 
-    int fd = timerfd_create(CLOCK_MONOTONIC, 0);
+    int fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
     if_invalid_fd (fd)
     {
         return EM_ERROR_BADFD;
