@@ -172,18 +172,48 @@ typedef struct EM_s
  * }
  * // ...
  * @endcode
+ *
+ * @param[in] event_machine
+ *   Event machine instance function operates on. Note that some information
+ *   are supplied in it. See also macros <tt>EM_STATIC_WITH_MAX_EVENTS</tt>
+ *   and <tt>EM_STATIC_DEFAULT</tt>.
+ *
+ * @return
+ *   On success function returns <tt>EM_SUCCESS</tt> and on failure it returns
+ *   positive integer from <tt>enum EM_result</tt>.
  */
 uint32_t event_machine_init(EM *event_machine);
 
 /** Cleanup any resources associated with <tt>EM</tt> structure.
+ *
+ * @param[in] event_machine
+ *   Event machine instance function operates on.
+ *
+ * @return
+ *   On success function returns <tt>EM_SUCCESS</tt> and on failure it returns
+ *   positive integer from <tt>enum EM_result</tt>.
  */
 uint32_t event_machine_destroy(EM *event_machine);
 
 /** Start Event Machine main loop.
+ *
+ * @param[in] event_machine
+ *   Event machine instance function operates on.
+ *
+ * @return
+ *   On success function returns <tt>EM_SUCCESS</tt> and on failure it returns
+ *   positive integer from <tt>enum EM_result</tt>.
  */
 uint32_t event_machine_run(EM *event_machine);
 
 /** Notify Event Machine to break main loop as soon as possible.
+ *
+ * @param[in] event_machine
+ *   Event machine instance function operates on.
+ *
+ * @return
+ *   On success function returns <tt>EM_SUCCESS</tt> and on failure it returns
+ *   positive integer from <tt>enum EM_result</tt>.
  */
 uint32_t event_machine_terminate(EM *event_machine);
 
@@ -212,6 +242,18 @@ uint32_t event_machine_terminate(EM *event_machine);
  * }
  * // ...
  * @endcode
+ *
+ * @param[in] event_machine
+ *   Event machine instance function operates on. Note that some information
+ *   are supplied in it. See also macros <tt>EM_STATIC_WITH_MAX_EVENTS</tt>
+ *   and <tt>EM_STATIC_DEFAULT</tt>.
+ *
+ * @param[in] event_descriptor
+ *   Event descriptor caller wants to register.
+ *
+ * @return
+ *   On success function returns <tt>EM_SUCCESS</tt> and on failure it returns
+ *   positive integer from <tt>enum EM_result</tt>.
  */
 uint32_t event_machine_add(EM *, EM_event_descriptor *);
 
@@ -227,6 +269,23 @@ uint32_t event_machine_add(EM *, EM_event_descriptor *);
  *
  * In case that descriptor storage is not initialized it always returns NULL if
  * caller supplies non-NULL pointer.
+ *
+ * @param[in] event_machine
+ *   Event machine instance function operates on.
+ *
+ * @param[in] fd
+ *   File descriptor that caller wants to change registration of. Note that it
+ *   has to be the same as value as provided in <tt>event_descriptor</tt>.
+ *
+ * @param[out] old_event_descriptor
+ *   Function returns pointer to old event descriptor so caller can deallocate
+ *   it if neccessary. If instead of valid pointer caller supplies
+ *   <tt>NULL</tt> then this function won't try to return pointer to old event
+ *   descriptor.
+ *
+ * @return
+ *   On success function returns <tt>EM_SUCCESS</tt> and on failure it returns
+ *   positive integer from <tt>enum EM_result</tt>.
  */
 uint32_t event_machine_delete(EM *event_machine, int fd,
     EM_event_descriptor **old_event_descriptor);
@@ -241,11 +300,25 @@ uint32_t event_machine_delete(EM *event_machine, int fd,
  * event_machine_delete() for details.
  *
  * @param[in] event_machine
+ *   Event machine instance function operates on.
+ *
  * @param[in] fd
+ *   File descriptor that caller wants to change registration of. Note that it
+ *   has to be the same as value as provided in <tt>event_descriptor</tt>.
+ *
  * @param[in] event_descriptor
+ *   Event descriptor caller wants to use instead of old one associated with
+ *   <tt>fd</tt>.
+ *
  * @param[out] old_event_descriptor
+ *   Function returns pointer to old event descriptor so caller can deallocate
+ *   it if neccessary. If instead of valid pointer caller supplies
+ *   <tt>NULL</tt> then this function won't try to return pointer to old event
+ *   descriptor.
  *
  * @return
+ *   On success function returns <tt>EM_SUCCESS</tt> and on failure it returns
+ *   positive integer from <tt>enum EM_result</tt>.
  */
 uint32_t event_machine_modify(EM *event_machine, int fd,
     EM_event_descriptor *event_descriptor,
