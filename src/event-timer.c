@@ -45,6 +45,18 @@ static void internal_timeout_handler(EM *const em, const uint32_t events,
     }
 }
 
+static void shred(Event_timer *const timer)
+{
+    /* Make sure that all information stored in Event_timer structure are lost.
+     * Since most of the entries are pointers this is the simplest way, but it
+     * is good practice to set file descriptors to -1,  because its an invalid
+     * value.
+     */
+    memset(timer, 0, sizeof(Event_timer));
+    TIMER_FD(timer) = -1;
+    TIMER_ED(timer).fd = -1;
+}
+
 uint32_t event_timer_create(EM *const event_machine, Event_timer *const timer,
     const Event_timer_handler callback, void *const data)
 {
@@ -76,7 +88,34 @@ uint32_t event_timer_create(EM *const event_machine, Event_timer *const timer,
     TIMER_ED(timer).data = timer;
     TIMER_ED(timer).handler = internal_timeout_handler;
 
-    return event_machine_add(event_machine, &TIMER_ED(timer));
+    uint32_t ret = event_machine_add(event_machine, &TIMER_ED(timer));
+    if_em_failure (ret)
+    {
+        int saved_errno = errno;
+
+        /* Already checked that event_machine != NULL.
+         */
+        assert(ret != EM_ERROR_NULL);
+
+        /* Passed Event_descriptor is part of Event_timer structure
+         * and it was checked that timer != NULL
+         */
+        assert(ret != EM_ERROR_DESCRIPTOR_NULL);
+
+        /* If close() or something in shred() fails then its errno is ignored.
+         * At this point error returned by event_machine_add() has more
+         * priority.
+         *
+         * If for some reason event_machine_add() returned error and fd was
+         * registered with epoll, then closing it is correct thing to do. Epoll
+         * handles closed file descriptors by removing them.
+         */
+        close(fd);
+        shred(timer);
+        errno = saved_errno;
+    }
+
+    return ret;
 }
 
 uint32_t event_timer_start(Event_timer *const timer, const int32_t msec)
@@ -86,18 +125,15 @@ uint32_t event_timer_start(Event_timer *const timer, const int32_t msec)
         return EM_ERROR_TIMER_NULL;
     }
 
+    struct timespec expiration_time =
+    {
+        .tv_sec = msec / 1000,
+        .tv_nsec = (msec % 1000) * 1000
+    };
     struct itimerspec expiration =
     {
-        .it_interval =
-        {
-            .tv_sec = msec / 1000,
-            .tv_nsec = (msec % 1000) * 1000
-        },
-        .it_value =
-        {
-            .tv_sec = expiration.it_interval.tv_sec,
-            .tv_nsec = expiration.it_interval.tv_nsec
-        }
+        .it_interval = expiration_time,
+        .it_value = expiration_time
     };
     if_negative (timerfd_settime(TIMER_FD(timer), 0, &expiration, NULL))
     {
@@ -140,6 +176,15 @@ uint32_t event_timer_destroy(Event_timer *const timer)
     {
         int saved_errno = errno;
 
+        /* Already checked that event_machine != NULL.
+         */
+        assert(ret != EM_ERROR_NULL);
+
+        /* Passed Event_descriptor is part of Event_timer structure
+         * and it was checked that timer != NULL
+         */
+        assert(ret != EM_ERROR_DESCRIPTOR_NULL);
+
         /* If close() fails then its errno is ignored. At this point error
          * returned by event_machine_delete() has more priority.
          */
@@ -154,14 +199,7 @@ uint32_t event_timer_destroy(Event_timer *const timer)
         return EM_ERROR_CLOSE;
     }
 
-    /* Make sure that all information stored in Event_timer structure are lost.
-     * Since most of the entries are pointers this is the simplest way, but it
-     * is good practice to set file descriptors to -1,  because its an invalid
-     * value.
-     */
-    memset(timer, 0, sizeof(Event_timer));
-    TIMER_FD(timer) = -1;
-    TIMER_ED(timer).fd = -1;
+    shred(timer);
 
     return EM_SUCCESS;
 }
