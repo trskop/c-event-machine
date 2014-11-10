@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 
+// Explained in stdin-stdout.c.
 void stdin_handler(EM *em, uint32_t events, int fd, void *data)
 {
     char buffer[4096];
@@ -35,11 +36,13 @@ void stdin_handler(EM *em, uint32_t events, int fd, void *data)
     return;
 }
 
+// Timeout callback for periodic timer.
 void timer_timeout(Event_timer *timer, void *data)
 {
     printf("timer timeout\n");
 }
 
+// Timeout callback for one shot timer.
 void oneshot_timer_timeout(Event_timer *timer, void *data)
 {
     printf("timer oneshot timeout\n");
@@ -50,11 +53,14 @@ int main()
     struct epoll_event epoll_events[EM_DEFAULT_MAX_EVENTS];
     EM em = EM_STATIC_WITH_MAX_EVENTS(EM_DEFAULT_MAX_EVENTS, epoll_events);
 
+    // Event machine initialization must be executed before timer_create().
     if_em_failure (event_machine_init(&em))
     {
         exit(EXIT_FAILURE);
     }
 
+    // This part is inherited from stdin-stdout.c to make example 
+    // interruptible. This is not important for event-timer.
     EM_event_descriptor ed =
         { .events = EPOLLIN
         , .fd = STDIN_FILENO
@@ -66,6 +72,11 @@ int main()
         exit(EXIT_FAILURE);
     }
 
+    // Create structure for timer. This structure must stay allocated for the 
+    // timer life time. Parameters passed to event_timer_create() are event 
+    // machie, timer, callback timer_timeout(), NULL.
+    // And also at the same time start timer. Parameters are timer structure,
+    // timeout in ms and also false to set timer to periodic state.
     Event_timer timer;
     if (is_em_failure(event_timer_create(&em, &timer, timer_timeout, NULL))
     || is_em_failure(event_timer_start(&timer, 1500, false)))
@@ -74,6 +85,7 @@ int main()
         exit(EXIT_FAILURE);
     }
 
+    // Again create and start timer with one difference timer is one shot.
     Event_timer oneshot_timer;
     if(is_em_failure(event_timer_create(&em, &oneshot_timer, oneshot_timer_timeout, NULL))
     || is_em_failure(event_timer_start(&oneshot_timer, 1500, true)))
@@ -82,11 +94,13 @@ int main()
         exit(EXIT_FAILURE);
     }
 
+    // And run event machine to process all event coming from timers.
     if_em_failure (event_machine_run(&em))
     {
         exit(EXIT_FAILURE);
     }
 
+    // Destroy all timers.
     if (is_em_failure(event_timer_stop(&timer))
         || is_em_failure(event_timer_destroy(&timer))
         || is_em_failure(event_timer_destroy(&oneshot_timer)))
@@ -94,6 +108,7 @@ int main()
         exit(EXIT_FAILURE);
     }
 
+    // Destroy event machine.
     if_em_failure (event_machine_destroy(&em))
     {
         exit(EXIT_FAILURE);

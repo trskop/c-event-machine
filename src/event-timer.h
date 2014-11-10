@@ -34,6 +34,15 @@
 #ifndef EVENT_TIMER_H_37644463622302162596821921420243050348
 #define EVENT_TIMER_H_37644463622302162596821921420243050348
 
+/** @file event-timer.h
+ * Contains interface for timer based on event-machine.
+ * Usage examples can be found in @link example/timer.c @endlink
+ * @example example/timer.c
+ *   Timer example is basd on stdin-stdout.c example to make it interruptible.
+ *   For more detail about stdin-stdout.c example see: @link 
+ *   example/stdin-stdout.c @endlink.
+ */
+
 #include "event-machine.h"
 
 #ifdef __cplusplus
@@ -190,6 +199,9 @@ uint32_t event_timer_stop(Event_timer *timer);
  *   On success function returns #EM_SUCCESS.
  */
 uint32_t event_timer_destroy(Event_timer *timer);
+
+
+
 
 #ifdef __cplusplus
 }
