@@ -118,7 +118,8 @@ uint32_t event_timer_create(EM *const event_machine, Event_timer *const timer,
     return ret;
 }
 
-uint32_t event_timer_start(Event_timer *const timer, const int32_t msec)
+uint32_t event_timer_start(Event_timer *const timer, const int32_t msec,
+    const bool is_one_shot)
 {
     if_null (timer)
     {
@@ -130,11 +131,13 @@ uint32_t event_timer_start(Event_timer *const timer, const int32_t msec)
         .tv_sec = msec / 1000,
         .tv_nsec = (msec % 1000) * 1000
     };
+    struct timespec expiration_time_zero = {0, 0};
     struct itimerspec expiration =
     {
-        .it_interval = expiration_time,
+        .it_interval = is_one_shot ? expiration_time_zero : expiration_time,
         .it_value = expiration_time
     };
+    
     if_negative (timerfd_settime(TIMER_FD(timer), 0, &expiration, NULL))
     {
         return EM_ERROR_TIMERFD_SETTIME;

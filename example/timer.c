@@ -40,6 +40,11 @@ void timer_timeout(Event_timer *timer, void *data)
     printf("timer timeout\n");
 }
 
+void oneshot_timer_timeout(Event_timer *timer, void *data)
+{
+    printf("timer oneshot timeout\n");
+}
+
 int main()
 {
     struct epoll_event epoll_events[EM_DEFAULT_MAX_EVENTS];
@@ -63,8 +68,17 @@ int main()
 
     Event_timer timer;
     if (is_em_failure(event_timer_create(&em, &timer, timer_timeout, NULL))
-        || is_em_failure(event_timer_start(&timer, 1500)))
+    || is_em_failure(event_timer_start(&timer, 1500, false)))
     {
+    	perror("error: ");
+        exit(EXIT_FAILURE);
+    }
+
+    Event_timer oneshot_timer;
+    if(is_em_failure(event_timer_create(&em, &oneshot_timer, oneshot_timer_timeout, NULL))
+    || is_em_failure(event_timer_start(&oneshot_timer, 1500, true)))
+    {
+        perror("error: ");
         exit(EXIT_FAILURE);
     }
 
@@ -74,7 +88,8 @@ int main()
     }
 
     if (is_em_failure(event_timer_stop(&timer))
-        || is_em_failure(event_timer_destroy(&timer)))
+        || is_em_failure(event_timer_destroy(&timer))
+        || is_em_failure(event_timer_destroy(&oneshot_timer)))
     {
         exit(EXIT_FAILURE);
     }
