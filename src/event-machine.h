@@ -30,6 +30,33 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/** @file event-machine.h
+ *
+ * Simple low-level event machine based on Linux <tt>epoll()</tt>.
+ *
+ * Usage examples can be found here:
+ *
+ * @li @link example/stdin-stdout.c @endlink
+ * @li @link example/tcp-server.c @endlink
+ *
+ * @author Peter Trško
+ * @date 2014
+ * @copyright BSD3
+ *
+ * @example example/stdin-stdout.c
+ *   Behaves as simple version of UNIX <tt>cat</tt> command that reads from
+ *   <tt>stdin</tt> and writes to <tt>stdout</tt>. Note that input may not be a
+ *   file, because file descriptors for regular files can not be
+ *   <tt>epoll()</tt>-ed, it would not make sense. Example can be properly
+ *   terminated by closing standard input (<tt>CTRL-D</tt> on POSIX-like
+ *   platforms). For details see mentioned
+ *   @link example/stdin-stdout.c @endlink.
+ *
+ * @example example/tcp-server.c
+ *   Simple TCP server that reads data from clients and prints it to stdout.
+ *   For details see mentioned @link example/stdin-stdout.c @endlink.
+ */
+
 #ifndef EVENT_MACHINE_H_230071399244842574860511267360184913417
 #define EVENT_MACHINE_H_230071399244842574860511267360184913417
 
@@ -42,12 +69,66 @@
 extern "C" {
 #endif
 
+/** Default value of how many events should event machine process in one
+ * iteration.
+ */
 #define EM_DEFAULT_MAX_EVENTS   4096
 
 struct EM_s;    /* Forward declaration */
 
-typedef void (*EM_event_handler)(struct EM_s *, uint32_t, int, void *);
+/** Type of callbacks triggered by event.
+ *
+ * @param[in] event_machine
+ *   #EM (event machine) that invoked this callback function.
+ *
+ * @param[in] events
+ *   Bitarray of events that triggered this specific call of callback function.
+ *
+ * @param[in] fd
+ *   File descriptor for which events occurred while being monitored by
+ *   event_machine.
+ *
+ * @param[in] data
+ *   Pointer to private data associated with this specific file descriptor
+ *   via Event_descriptor.
+ */
+typedef void (*EM_event_handler)(struct EM_s *event_machine, uint32_t events,
+    int fd, void *data);
 
+/** Structure that describes set of events that event machine monitors on
+ * specific file descriptor.
+ *
+ * Instances of this structure has to be registered in an #EM (event machine)
+ * using event_machine_add() function. Example:
+ *
+ * @code{.c}
+ * // ...
+ * Event_descriptor event_descriptor =
+ * {
+ *     // Listen for data ready for read and do it in edge-triggered mode.
+ *     // See epoll(7) manual page for details.
+ *     .events = EPOLLIN | EPOLLET,
+ *
+ *     // File descriptor that will be monitored by event machine for above
+ *     // specified events.
+ *     .fd = some_file_descriptor,
+ *
+ *     // Pointer that will be passed to each incarnation of "handler"
+ *     // callback.
+ *     .data = some_state
+ *
+ *     // Function called each time one of the above events is detected on
+ *     // above file descriptor.
+ *     .handler = some_function
+ * }
+ *
+ * if (event_machine_add(event_machine, &event_descriptor) != EM_SUCCESS)
+ * {
+ *     // Error handling.
+ * }
+ * // ...
+ * @endcode
+ */
 typedef struct
 {
     /** Events as passed to epoll_ctl(). Do not confuse them with events that
@@ -140,7 +221,7 @@ typedef struct EM_s
     EM_descriptor_storage descriptor_storage;
 } EM;
 
-/** Initialize EM structure.
+/** Initialize #EM structure.
  *
  * Usage example without user supplied buffer:
  *
@@ -255,7 +336,8 @@ uint32_t event_machine_terminate(EM *event_machine);
  *   On success function returns <tt>EM_SUCCESS</tt> and on failure it returns
  *   positive integer from <tt>enum EM_result</tt>.
  */
-uint32_t event_machine_add(EM *, EM_event_descriptor *);
+uint32_t event_machine_add(EM *event_machine,
+    EM_event_descriptor *event_descriptor);
 
 /** Unregister file descriptor.
  *
@@ -324,7 +406,7 @@ uint32_t event_machine_modify(EM *event_machine, int fd,
     EM_event_descriptor *event_descriptor,
     EM_event_descriptor **old_event_descriptor);
 
-/** Statically set user specified entries of EM structure.
+/** Statically set user specified entries of #EM structure.
  *
  * Usage example:
  *
@@ -339,6 +421,15 @@ uint32_t event_machine_modify(EM *event_machine, int fd,
  * }
  * // ...
  * @endcode
+ *
+ * @param[in] maxevs
+ *   Maximum how many events can event machine process in one iteration.
+ *
+ * @param[in] evs
+ *   Buffer for storing <tt>maxevs</tt> events that occurred on monitored file
+ *   descriptors. If <tt>evs = NULL</tt> then event_machine_init() will
+ *   allocate space for <tt>maxevs</tt> events. If such memory is allocated
+ *   then it is freed by event_machine_destroy().
  */
 #define EM_STATIC_WITH_MAX_EVENTS(maxevs, evs)  \
     { .epoll_fd = -1                            \
@@ -359,7 +450,7 @@ uint32_t event_machine_modify(EM *event_machine, int fd,
         }                                       \
     }
 
-/** Statically set user specified entries of EM structure to their default
+/** Statically set user specified entries of #EM structure to their default
  * values.
  *
  * Usage example:
@@ -376,7 +467,7 @@ uint32_t event_machine_modify(EM *event_machine, int fd,
  *     // Error handling.
  * }
  * // ...
- * @endcode{.c}
+ * @endcode
  */
 #define EM_STATIC_DEFAULT   \
     EM_STATIC_WITH_MAX_EVENTS(EM_DEFAULT_MAX_EVENTS, NULL)

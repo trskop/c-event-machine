@@ -30,6 +30,16 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/** @file event-machine/result-internal.h
+ * Header file used internally for simplified error handling.
+ *
+ * @warning
+ *   This header file is not meant to be used outside of this library.
+ * @author Peter Trško
+ * @date 2014
+ * @copyright BSD3
+ */
+
 #ifndef EVENT_MACHINE_RESULT_INTERNAL_H_276692761618985232313111534537946615305
 #define EVENT_MACHINE_RESULT_INTERNAL_H_276692761618985232313111534537946615305
 
