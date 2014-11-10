@@ -80,7 +80,7 @@ uint32_t event_timer_create(EM *const event_machine, Event_timer *const timer,
     int fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
     if_invalid_fd (fd)
     {
-        return EM_ERROR_BADFD;
+        return EM_ERROR_TIMERFD_CREATE;
     }
 
     TIMER_ED(timer).fd = fd;
@@ -137,7 +137,7 @@ uint32_t event_timer_start(Event_timer *const timer, const int32_t msec,
         .it_interval = is_one_shot ? expiration_time_zero : expiration_time,
         .it_value = expiration_time
     };
-    
+
     if_negative (timerfd_settime(TIMER_FD(timer), 0, &expiration, NULL))
     {
         return EM_ERROR_TIMERFD_SETTIME;

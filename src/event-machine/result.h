@@ -123,11 +123,17 @@ enum EM_result {
      */
     EM_ERROR_EPOLL_WAIT = 32 + 7,
 
+    /** Calling <tt>timerfd_create()</tt> failed.
+     *
+     * See value of <tt>errno</tt> for details.
+     */
+    EM_ERROR_TIMERFD_CREATE = 32 + 8,
+
     /** Calling <tt>timerfd_settime()</tt> failed.
      *
      * See value of <tt>errno</tt> for details.
      */
-    EM_ERROR_TIMERFD_SETTIME = 32 + 8,
+    EM_ERROR_TIMERFD_SETTIME = 32 + 9,
 
     /** Trying to store duplicate event descriptor.
      */
