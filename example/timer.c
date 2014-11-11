@@ -75,22 +75,28 @@ int main()
     // Create structure for timer. This structure must stay allocated for the 
     // timer life time. Parameters passed to event_timer_create() are event 
     // machie, timer, callback timer_timeout(), NULL.
-    // And also at the same time start timer. Parameters are timer structure,
-    // timeout in ms and also false to set timer to periodic state.
     Event_timer timer;
-    if (is_em_failure(event_timer_create(&em, &timer, timer_timeout, NULL))
-    || is_em_failure(event_timer_start(&timer, 1500, false)))
+    if (is_em_failure(event_timer_create(&em, &timer, timer_timeout, NULL)))
     {
-    	perror("error: ");
+        exit(EXIT_FAILURE);
+    }
+    // Start timer. Parameters are timer structure, timeout in ms and also
+    // false to set timer to periodic state.
+    if (is_em_failure(event_timer_start(&timer, 1500, false)))
+    {
         exit(EXIT_FAILURE);
     }
 
-    // Again create and start timer with one difference timer is one shot.
+    // Again create and start timer with one difference: timer is one shot.
+    // That means timer will expirate only once.
     Event_timer oneshot_timer;
-    if(is_em_failure(event_timer_create(&em, &oneshot_timer, oneshot_timer_timeout, NULL))
-    || is_em_failure(event_timer_start(&oneshot_timer, 1500, true)))
+    if (is_em_failure(event_timer_create(&em, &oneshot_timer,
+        oneshot_timer_timeout, NULL)))
     {
-        perror("error: ");
+        exit(EXIT_FAILURE);
+    }
+    if (is_em_failure(event_timer_start(&oneshot_timer, 1500, true)))
+    {
         exit(EXIT_FAILURE);
     }
 
@@ -100,10 +106,20 @@ int main()
         exit(EXIT_FAILURE);
     }
 
-    // Destroy all timers.
-    if (is_em_failure(event_timer_stop(&timer))
-        || is_em_failure(event_timer_destroy(&timer))
-        || is_em_failure(event_timer_destroy(&oneshot_timer)))
+    // Stop periodic timer.
+    // Oneshot timer don't need to be stopped because it should be stopped
+    // by now on its own.
+    if (is_em_failure(event_timer_stop(&timer)))
+    {
+        exit(EXIT_FAILURE);
+    }
+
+    // Destroy both timers.
+    if (is_em_failure(event_timer_destroy(&timer)))
+    {
+        exit(EXIT_FAILURE);
+    }
+    if (is_em_failure(event_timer_destroy(&oneshot_timer)))
     {
         exit(EXIT_FAILURE);
     }
