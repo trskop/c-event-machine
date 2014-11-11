@@ -2,13 +2,13 @@
 #include "event-timer.h"
 #include <errno.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/epoll.h>
 #include <unistd.h>
-#include <stdio.h>
 
 
-// Explained in stdin-stdout.c.
+// Explained in stdin-stdout.c example.
 void stdin_handler(EM *em, uint32_t events, int fd, void *data)
 {
     char buffer[4096];
@@ -16,7 +16,7 @@ void stdin_handler(EM *em, uint32_t events, int fd, void *data)
 
     if ((len = read(fd, &buffer, 4096)) < 0)
     {
-        ;
+        perror("stdin_handler(): read()");
     }
     else if (len == 0)
     {
@@ -24,7 +24,7 @@ void stdin_handler(EM *em, uint32_t events, int fd, void *data)
     }
     else if (write(STDOUT_FILENO, &buffer, len) < 0)
     {
-        ;
+        perror("stdin_handler(): write()");
     }
     else
     {
@@ -59,8 +59,9 @@ int main()
         exit(EXIT_FAILURE);
     }
 
-    // This part is inherited from stdin-stdout.c to make example 
-    // interruptible. This is not important for event-timer.
+    // This part is inherited from stdin-stdout.c to make example
+    // interruptible. This is not important for event-timer. See
+    // stdin-stdout.c example for details.
     EM_event_descriptor ed =
         { .events = EPOLLIN
         , .fd = STDIN_FILENO
@@ -72,23 +73,42 @@ int main()
         exit(EXIT_FAILURE);
     }
 
-    // Create structure for timer. This structure must stay allocated for the 
-    // timer life time. Parameters passed to event_timer_create() are event 
-    // machie, timer, callback timer_timeout(), NULL.
+    // Create Event_timer structure for one specific timer instance.
+    //
+    // This structure may not be for more then one timer at a time and stay
+    // allocated as long as the timer is used. Only after event_timer_destroy()
+    // is called it may be deallocated. However the memory it hodls may be
+    // reused after event_timer_destroy() call.
+    //
+    // Parameters passed to event_timer_create() are:
+    //
+    // 1. Event machie, which willwatch for timer expiration events.
+    // 2. Timer, structure that describes specific timer instance.
+    // 3. callback, in this case timer_timeout(), its execution is triggered by
+    //    event machine when it detects timer expiration.
+    // 4. NULL, pointer to private data passed to callback when its executed.
+    //    In this case "NULL = nothing".
     Event_timer timer;
     if (is_em_failure(event_timer_create(&em, &timer, timer_timeout, NULL)))
     {
         exit(EXIT_FAILURE);
     }
-    // Start timer. Parameters are timer structure, timeout in ms and also
-    // false to set timer to periodic state.
+
+    // Start timer.
+    //
+    // Parameters are:
+    //
+    // 1. Timer structure, see comment above.
+    // 2. Expiration time (i.e. timeout) in milliseconds
+    // 3. Boolean value that indicates if timer is periodic or one-shot. In
+    //    this case its value is false which means periodic timer.
     if (is_em_failure(event_timer_start(&timer, 1500, false)))
     {
         exit(EXIT_FAILURE);
     }
 
-    // Again create and start timer with one difference: timer is one shot.
-    // That means timer will expirate only once.
+    // Again create and start timer with one difference: this timer is one-shot
+    // timer. It means that this timer will expirate only once.
     Event_timer oneshot_timer;
     if (is_em_failure(event_timer_create(&em, &oneshot_timer,
         oneshot_timer_timeout, NULL)))
@@ -107,7 +127,8 @@ int main()
     }
 
     // Stop periodic timer.
-    // Oneshot timer don't need to be stopped because it should be stopped
+    //
+    // Oneshot timer doesn't need to be stopped because it should be stopped
     // by now on its own.
     if (is_em_failure(event_timer_stop(&timer)))
     {
