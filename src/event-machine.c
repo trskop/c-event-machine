@@ -123,9 +123,10 @@ uint32_t event_machine_init(EM *const em)
     em->epoll_fd = epoll_fd;
 
     struct epoll_event event =
-        { .events = BREAK_LOOP_ED(em).events
-        , .data.ptr = &(BREAK_LOOP_ED(em))
-        };
+    {
+        .events = BREAK_LOOP_ED(em).events,
+        .data.ptr = &(BREAK_LOOP_ED(em))
+    };
     if_not_zero (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, BREAK_LOOP_READ(em),
         &event))
     {
