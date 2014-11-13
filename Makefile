@@ -45,6 +45,9 @@ CPPFLAGS += $(addprefix -I,$(INCLUDE_PATH))
 #TARGET_ARCH +=
 #LDLIBS +=
 
+DOXYGEN = doxygen
+DOXYGEN_CONFIG = tools/Doxyfile
+
 MK_OUT_DIRS = \
     [ -e '$(dir $@)' ] || \
         { mkdir -p '$(dir $@)' && \
@@ -112,6 +115,15 @@ include-path:
 	@echo $(addprefix $(LOCAL_PWD)/,$(INCLUDE_PATH))
 .PHONY: include-path
 NO_DEPS_TARGETS += include-path
+
+doxygen:
+	$(DOXYGEN) $(DOXYGEN_CONFIG)
+.PHONY: doxygen
+NO_DEPS_TARGETS += doxygen
+
+api-doc: doxygen
+.PHONY: api-doc
+NO_DEPS_TARGETS += api-doc
 
 clean: clean-objects clean-dependency-files
 .PHONY: clean
