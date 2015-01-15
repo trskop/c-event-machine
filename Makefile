@@ -9,6 +9,8 @@ MACHINE_INFO := $(shell $(CC) -dumpmachine)
 OUT = $(OUT_DIR)/$(CC)-$(CC_VERSION)-$(MACHINE_INFO)/
 DEPS = $(OUT)dependency-files/
 
+OS := $(shell uname -s)
+
 LIB_DIR = lib
 LIB_BASE_NAME = event-machine
 LIB = $(OUT)$(LIB_DIR)/
@@ -24,7 +26,12 @@ EXE = $(EXE_DIR)/
 EXAMPLE_DIR ?= example
 EXAMPLE = $(EXAMPLE_DIR)/
 
+ifeq ($(OS),Darwin)
+# Currently timers aren't supported.
+SOURCES := $(SRC)/event-machine.c
+else
 SOURCES := $(shell find '$(SRC)' -name '*.c')
+endif
 OBJECTS = $(subst $(SRC),$(OUT),$(SOURCES:.c=.o))
 DEPENDENCY_FILES = $(subst $(SRC),$(DEPS),$(SOURCES:.c=.deps))
 
@@ -38,10 +45,15 @@ INCLUDE_PATH = $(SRC_DIR)
 CC_OUTPUT_OPTION = -o $@
 CC ?= gcc
 CFLAGS += -Wall -std=c11
-ifeq ($(shell uname -s),Linux)
-CFLAGS += -DHAVE_EPOLL
-endif
 CFLAGS += -D_POSIX_C_SOURCE=199901L
+
+ifeq ($(OS),Linux)
+CFLAGS += -DHAVE_EPOLL -DHAVE_PIPE2
+endif
+ifeq ($(OS),Darwin)
+CFLAGS += -DHAVE_KQUEUE
+endif
+
 CFLAGS += -g
 CPPFLAGS += $(addprefix -I,$(INCLUDE_PATH))
 #LDFLAGS +=

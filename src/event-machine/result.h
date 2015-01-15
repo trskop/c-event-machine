@@ -105,23 +105,24 @@ enum EM_result {
      */
     EM_ERROR_WRITE = 32 + 4,
 
-    /** Calling <tt>epoll_create()</tt> or <tt>epoll_create1()</tt> failed.
+    /** Calling <tt>epoll_create()</tt> or <tt>epoll_create1()</tt> or
+     * <tt>kqueue()</tt> failed.
      *
      * See value of <tt>errno</tt> for details.
      */
-    EM_ERROR_EPOLL_CREATE = 32 + 5,
+    EM_ERROR_EVENT_CREATE_QUEUE = 32 + 5,
 
-    /** Calling <tt>epoll_ctl()</tt> failed.
+    /** Calling <tt>epoll_ctl()</tt> or <tt>kevent()</tt> failed.
      *
      * See value of <tt>errno</tt> for details.
      */
-    EM_ERROR_EPOLL_CTL = 32 + 6,
+    EM_ERROR_EVENT_CTL = 32 + 6,
 
-    /** Calling <tt>epoll_wait()</tt> failed.
+    /** Calling <tt>epoll_wait()</tt> or <tt>kevent()</tt> failed.
      *
      * See value of <tt>errno</tt> for details.
      */
-    EM_ERROR_EPOLL_WAIT = 32 + 7,
+    EM_ERROR_EVENT_WAIT = 32 + 7,
 
     /** Calling <tt>timerfd_create()</tt> failed.
      *
@@ -134,6 +135,12 @@ enum EM_result {
      * See value of <tt>errno</tt> for details.
      */
     EM_ERROR_TIMERFD_SETTIME = 32 + 9,
+
+    /** Calling <tt>fcntl()</tt> failed.
+     *
+     * See value of <tt>errno</tt> for details.
+     */
+    EM_ERROR_FCNTL = 32 + 10,
 
     /** Trying to store duplicate event descriptor.
      */

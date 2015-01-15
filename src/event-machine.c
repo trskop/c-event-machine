@@ -30,15 +30,38 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef HAVE_PIPE2
 #define _GNU_SOURCE
+#endif
+
 #include "event-machine.h"
 #include "event-machine/result-internal.h"
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
-#include <sys/epoll.h>
 #include <unistd.h>
+
+#ifdef HAVE_EPOLL
+#include <sys/epoll.h>
+
+#define GET_EVENT_DATA_PTR(e)   ((e).data.ptr)
+
+#define EVENT_ADD       EPOLL_CTL_ADD
+#define EVENT_MODIFY    EPOLL_CTL_MOD
+#define EVENT_DELETE    EPOLL_CTL_DEL
+#endif /* HAVE_EPOLL */
+
+#ifdef HAVE_KQUEUE
+#include <sys/types.h>
+#include <sys/event.h>
+
+#define GET_EVENT_DATA_PTR(e)   ((e).udata)
+
+#define EVENT_ADD       EV_ADD
+#define EVENT_MODIFY    EV_ADD
+#define EVENT_DELETE    EV_DELETE
+#endif /* HAVE_KQUEUE */
 
 #define BREAK_LOOP_ED(em)       (em->break_loop_event_descriptor)
 #define BREAK_LOOP_PIPE(em)     (em->break_loop_pipe)
@@ -50,6 +73,85 @@
 #define STORAGE_REMOVE(em)                  (em->descriptor_storage.remove)
 #define STORAGE_REMOVE_ENTRY(em, fd, ptr)   (STORAGE_REMOVE(em)(fd, ptr))
 
+
+static inline int create_event_queue()
+{
+#ifdef HAVE_EPOLL
+    /* Function epoll_create1() was introduced in Linux kernel 2.6.27 and glibc
+     * support was added in version 2.9.
+     */
+    return epoll_create1(EPOLL_CLOEXEC);
+#endif /* HAVE_EPOLL */
+
+#ifdef HAVE_KQUEUE
+    return kqueue();
+#endif
+}
+
+static inline int event_ctl(const int queue_fd, EM_event_descriptor *const ed,
+    int fd, int operation)
+{
+    const int event_fd     = ed == NULL ? fd : ed->fd;
+    const int event_filter = ed == NULL ? 0  : ed->events;
+
+#ifdef HAVE_EPOLL
+    struct epoll_event event =
+    {
+        .events   = event_filter,
+        .data.ptr = ed
+    };
+
+    /* When removing file descriptor Linux kernel versions prior to 2.6.9
+     * require fourth argument to epoll_ctl() to be non-NULL even though it's
+     * not used. Therefore it is correct to pass event as it is and not have a
+     * special case for a case when "operation = EVENT_DELETE".
+     */
+    int ret = epoll_ctl(queue_fd, operation, event_fd, &event);
+    if_not_zero (ret)
+    {
+        /* If adding or deleting file descriptor than the following workaround
+         * is not applicable and we may return right away.
+         */
+        if (operation != EVENT_MODIFY || errno != EEXIST)
+        {
+            return ret;
+        }
+
+        /* It is either trying to add file descriptor that is already there or
+         * it encountered kernel bug when using file descriptor that was
+         * dup()-ed. Calling epoll_ctl() with EPOLL_CTL_MOD may succeed in such
+         * case.
+         */
+        return epoll_ctl(queue_fd, operation, ed->fd, &event);
+    }
+
+    return ret;
+#endif /* HAVE_EPOLL */
+
+#ifdef HAVE_KQUEUE
+    struct kevent event =
+    {
+        .ident  = (uintptr_t)event_fd;
+        .filter = (int16_t)event_filter;
+        .flags  = EV_ADD;
+        .udata  = (void *)ed;
+    };
+
+    return kevent(queue_fd, &event, 1, NULL, 0, NULL);
+#endif /* HAVE_KQUEUE */
+}
+
+static inline int event_wait(const int queue_fd, event_t events[],
+    const int max_events)
+{
+#ifdef HAVE_EPOLL
+    return epoll_wait(queue_fd, events, max_events, -1);
+#endif /* HAVE_EPOLL */
+
+#if HAVE_KQUEUE
+    return kevent(queue_fd, NULL, 0, events, max_events, NULL);
+#endif /* HAVE_KQUEUE */
+}
 
 uint32_t event_machine_init(EM *const em)
 {
@@ -66,7 +168,7 @@ uint32_t event_machine_init(EM *const em)
 
     if_null (em->events)
     {
-        em->events = malloc(sizeof(struct epoll_event) * em->max_events);
+        em->events = malloc(sizeof(event_t) * em->max_events);
 
         /* Function event_machine_destroy() will call
          * free(em->events) when this flag is set.
@@ -88,14 +190,28 @@ uint32_t event_machine_init(EM *const em)
      * there is nobody to read data from the pipe. Since pipes have
      * finite buffer size then after filling it up any subsequent
      * write, i.e. event_machine_terminate() call, would be blocked.
-     *
-     * XXX: To get rid of _GNU_SOURCE declaration we would need to switch to
-     *      "pipe() + 2 * fcntl()".
      */
+#if HAVE_PIPE2
     if_not_zero (pipe2(BREAK_LOOP_PIPE(em), O_CLOEXEC | O_NONBLOCK))
     {
         return EM_ERROR_PIPE;
     }
+#else
+    if_not_zero (pipe(BREAK_LOOP_PIPE(em)))
+    {
+        return EM_ERROR_PIPE;
+    }
+
+    if_negative (fcntl(BREAK_LOOP_READ(em), F_SETFL, FD_CLOEXEC | O_NONBLOCK))
+    {
+        return EM_ERROR_FCNTL;
+    }
+
+    if_negative (fcntl(BREAK_LOOP_WRITE(em), F_SETFL, FD_CLOEXEC | O_NONBLOCK))
+    {
+        return EM_ERROR_FCNTL;
+    }
+#endif /* HAVE_PIPE2 */
 
     /* The break_loop_pipe is used to notify main event handling loop
      * that it should terminate. As a result we need to react to
@@ -103,7 +219,7 @@ uint32_t event_machine_init(EM *const em)
      * write end is used by event_machine_terminate() to send the
      * notification.
      */
-    BREAK_LOOP_ED(em).events = EPOLLIN;
+    BREAK_LOOP_ED(em).events = EVENT_READ;
     BREAK_LOOP_ED(em).fd = BREAK_LOOP_READ(em);
 
     /* This event is handled internally so there is no need for spplying
@@ -112,25 +228,16 @@ uint32_t event_machine_init(EM *const em)
     BREAK_LOOP_ED(em).data = NULL;
     BREAK_LOOP_ED(em).handler = NULL;
 
-    /* Function epoll_create1() was introduced in Linux kernel 2.6.27 and glibc
-     * support was added in version 2.9.
-     */
-    int queue_fd = epoll_create1(EPOLL_CLOEXEC);
+    int queue_fd = create_event_queue();
     if_invalid_fd (queue_fd)
     {
-        return EM_ERROR_EPOLL_CREATE;
+        return EM_ERROR_EVENT_CREATE_QUEUE;
     }
     em->queue_fd = queue_fd;
 
-    struct epoll_event event =
+    if_not_zero (event_ctl(em->queue_fd, &(BREAK_LOOP_ED(em)), -1, EVENT_ADD))
     {
-        .events = BREAK_LOOP_ED(em).events,
-        .data.ptr = &(BREAK_LOOP_ED(em))
-    };
-    if_not_zero (epoll_ctl(queue_fd, EPOLL_CTL_ADD, BREAK_LOOP_READ(em),
-        &event))
-    {
-        return EM_ERROR_EPOLL_CTL;
+        return EM_ERROR_EVENT_CTL;
     }
 
     return EM_SUCCESS;
@@ -193,22 +300,24 @@ uint32_t event_machine_destroy(EM *const em)
 }
 
 static inline uint32_t event_machine_run_once(EM *const em,
-    const int queue_fd, struct epoll_event epoll_events[], const int max_events,
+    const int queue_fd, event_t events[], const int max_events,
     const int break_loop_read_fd, bool *const break_loop)
 {
     assert(em != NULL);
     assert(valid_fd(queue_fd));
     assert(valid_fd(break_loop_read_fd));
 
-    const int num_events = epoll_wait(queue_fd, epoll_events, max_events, -1);
+    const int num_events = event_wait(queue_fd, events, max_events);
     if_negative (num_events)
     {
-        return EM_ERROR_EPOLL_WAIT;
+        return EM_ERROR_EVENT_WAIT;
     }
 
     for (int i = 0; i < num_events; i++)
     {
-        EM_event_descriptor *ed = (EM_event_descriptor *)epoll_events[i].data.ptr;
+        EM_event_descriptor *ed =
+            (EM_event_descriptor *)(GET_EVENT_DATA_PTR(events[i]));
+
         if (ed->fd == break_loop_read_fd)
         {
             char ch;
@@ -226,7 +335,7 @@ static inline uint32_t event_machine_run_once(EM *const em,
         }
         else
         {
-            ed->handler(em, epoll_events[i].events, ed->fd, ed->data);
+            ed->handler(em, events[i].events, ed->fd, ed->data);
         }
     }
 
@@ -333,23 +442,9 @@ uint32_t event_machine_add(EM *const em, EM_event_descriptor *const ed)
         return EM_ERROR_BADFD;
     }
 
-    struct epoll_event ev = {.events = ed->events, .data.ptr = ed};
-    if_not_zero (epoll_ctl(em->queue_fd, EPOLL_CTL_ADD, ed->fd, &ev))
+    if_not_zero (event_ctl(em->queue_fd, ed, -1, EVENT_ADD))
     {
-        if (errno != EEXIST)
-        {
-            return EM_ERROR_EPOLL_CTL;
-        }
-
-        /* It is either trying to add file descriptor that is already there or
-         * it encountered kernel bug when using file descriptor that was
-         * dup()-ed. Calling epoll_ctl() with EPOLL_CTL_MOD may succeed in such
-         * case.
-         */
-        if_not_zero (epoll_ctl(em->queue_fd, EPOLL_CTL_MOD, ed->fd, &ev))
-        {
-            return EM_ERROR_EPOLL_CTL;
-        }
+        return EM_ERROR_EVENT_CTL;
     }
 
     if_not_null (STORAGE_INSERT(em))
@@ -413,7 +508,7 @@ uint32_t event_machine_delete(EM *const em, const int fd,
 
     /* It doesn't make sense to try to remove file descriptor if it's invalid
      * or if queue_fd is invalid. By checking for it we get more sensible error
-     * then if we wen't ahead and called epoll_ctl().
+     * then if we wen't ahead and called epoll_ctl()/kevent()/kevent64().
      */
     if (invalid_fd(em->queue_fd) || invalid_fd(fd))
     {
@@ -427,13 +522,9 @@ uint32_t event_machine_delete(EM *const em, const int fd,
         return EM_ERROR_BADFD;
     }
 
-    /* Linux kernel versions prior to 2.6.9 require fourth argument to
-     * epoll_ctl() to be non-NULL even though it's not used.
-     */
-    struct epoll_event ev;
-    if_not_zero (epoll_ctl(em->queue_fd, EPOLL_CTL_DEL, fd, &ev))
+    if_not_zero (event_ctl(em->queue_fd, NULL, fd, EVENT_DELETE))
     {
-        return EM_ERROR_EPOLL_CTL;
+        return EM_ERROR_EVENT_CTL;
     }
 
     return remove_event_descriptor(em, fd, old_ed);
@@ -465,10 +556,9 @@ uint32_t event_machine_modify(EM *const em, const int fd,
         return EM_ERROR_BADFD;
     }
 
-    struct epoll_event ev = {.events = ed->events, .data.ptr = ed};
-    if_not_zero (epoll_ctl(em->queue_fd, EPOLL_CTL_MOD, fd, &ev))
+    if_not_zero (event_ctl(em->queue_fd, ed, -1, EVENT_MODIFY))
     {
-        return EM_ERROR_EPOLL_CTL;
+        return EM_ERROR_EVENT_CTL;
     }
 
     ret_em_failure_of(ret, remove_event_descriptor(em, fd, old_ed));

@@ -88,15 +88,17 @@ extern "C" {
 /* {{{ Platform Dependent Code ***********************************************/
 
 #if HAVE_EPOLL
+#define EVENT_READ  EPOLLIN
+#define EVENT_WRITE EPOLLOUT
+
 typedef struct epoll_event event_t;
 #endif /* HAVE_EPOLL */
 
 #if HAVE_KQUEUE
-#if HAVE_KEVENT64
-typedef struct kevent64_s event_t;
-#else
+#define EVENT_READ  EVFILT_READ
+#define EVENT_WRITE EVFILT_WRITE
+
 typedef struct kevent event_t;
-#endif /* HAVE_KEVENT64 */
 #endif /* HAVE_KQUEUE */
 
 /* }}} Platform Dependent Code ***********************************************/
@@ -122,7 +124,7 @@ struct EM_s;    /* Forward declaration */
  *
  * @param[in] data
  *   Pointer to private data associated with this specific file descriptor
- *   via Event_descriptor.
+ *   via EM_event_descriptor.
  */
 typedef void (*EM_event_handler)(struct EM_s *event_machine, uint32_t events,
     int fd, void *data);
@@ -135,7 +137,7 @@ typedef void (*EM_event_handler)(struct EM_s *event_machine, uint32_t events,
  *
  * @code{.c}
  * // ...
- * Event_descriptor event_descriptor =
+ * EM_event_descriptor event_descriptor =
  * {
  *     // Listen for data ready for read and do it in edge-triggered mode.
  *     // See epoll(7) manual page for details.
