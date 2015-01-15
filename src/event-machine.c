@@ -131,10 +131,10 @@ static inline int event_ctl(const int queue_fd, EM_event_descriptor *const ed,
 #ifdef HAVE_KQUEUE
     struct kevent event =
     {
-        .ident  = (uintptr_t)event_fd;
-        .filter = (int16_t)event_filter;
-        .flags  = EV_ADD;
-        .udata  = (void *)ed;
+        .ident  = (uintptr_t)event_fd,
+        .filter = (int16_t)event_filter,
+        .flags  = EV_ADD,
+        .udata  = (void *)ed
     };
 
     return kevent(queue_fd, &event, 1, NULL, 0, NULL);
