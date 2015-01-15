@@ -46,6 +46,7 @@
 #include <sys/epoll.h>
 
 #define GET_EVENT_DATA_PTR(e)   ((e).data.ptr)
+#define GET_EVENTS(e)           ((e).events)
 
 #define EVENT_ADD       EPOLL_CTL_ADD
 #define EVENT_MODIFY    EPOLL_CTL_MOD
@@ -57,6 +58,9 @@
 #include <sys/event.h>
 
 #define GET_EVENT_DATA_PTR(e)   ((e).udata)
+
+/* TODO: Check how this is actually done with kevent(). */
+#define GET_EVENTS(e)           ((e).filter)
 
 #define EVENT_ADD       EV_ADD
 #define EVENT_MODIFY    EV_ADD
@@ -335,7 +339,7 @@ static inline uint32_t event_machine_run_once(EM *const em,
         }
         else
         {
-            ed->handler(em, events[i].events, ed->fd, ed->data);
+            ed->handler(em, GET_EVENTS(events[i]), ed->fd, ed->data);
         }
     }
 
