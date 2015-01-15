@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, Peter Trško <peter.trsko@gmail.com>
+/* Copyright (c) 2014, 2015, Peter Trško <peter.trsko@gmail.com>
  *
  * All rights reserved.
  *
@@ -60,22 +60,22 @@ uint32_t event_machine_init(EM *const em)
 
     if_invalid_max_events (em->max_events)
     {
-        em->epoll_events = NULL;
+        em->events = NULL;
         em->max_events = EM_DEFAULT_MAX_EVENTS;
     }
 
-    if_null (em->epoll_events)
+    if_null (em->events)
     {
-        em->epoll_events = malloc(sizeof(struct epoll_event) * em->max_events);
+        em->events = malloc(sizeof(struct epoll_event) * em->max_events);
 
         /* Function event_machine_destroy() will call
-         * free(em->epoll_events) when this flag is set.
+         * free(em->events) when this flag is set.
          */
-        em->do_free_epoll_events = true;
+        em->do_free_events = true;
     }
     else
     {
-        em->do_free_epoll_events = false;
+        em->do_free_events = false;
     }
 
     /* We need break_loop_pipe to be non-blocking to prevent writing
@@ -115,19 +115,19 @@ uint32_t event_machine_init(EM *const em)
     /* Function epoll_create1() was introduced in Linux kernel 2.6.27 and glibc
      * support was added in version 2.9.
      */
-    int epoll_fd = epoll_create1(EPOLL_CLOEXEC);
-    if_invalid_fd (epoll_fd)
+    int queue_fd = epoll_create1(EPOLL_CLOEXEC);
+    if_invalid_fd (queue_fd)
     {
         return EM_ERROR_EPOLL_CREATE;
     }
-    em->epoll_fd = epoll_fd;
+    em->queue_fd = queue_fd;
 
     struct epoll_event event =
     {
         .events = BREAK_LOOP_ED(em).events,
         .data.ptr = &(BREAK_LOOP_ED(em))
     };
-    if_not_zero (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, BREAK_LOOP_READ(em),
+    if_not_zero (epoll_ctl(queue_fd, EPOLL_CTL_ADD, BREAK_LOOP_READ(em),
         &event))
     {
         return EM_ERROR_EPOLL_CTL;
@@ -143,16 +143,16 @@ uint32_t event_machine_destroy(EM *const em)
         return EM_ERROR_NULL;
     }
 
-    /* Closing epoll_fd first to ensure that any epoll_ctl() and epoll_wait()
+    /* Closing queue_fd first to ensure that any epoll_ctl() and epoll_wait()
      * on it would fail.
      */
-    if_valid_fd (em->epoll_fd)
+    if_valid_fd (em->queue_fd)
     {
-        if_not_zero (close(em->epoll_fd));
+        if_not_zero (close(em->queue_fd));
         {
             return EM_ERROR_CLOSE;
         }
-        em->epoll_fd = -1;
+        em->queue_fd = -1;
     }
 
     /* Freeing memory for storing epoll events after closing epoll file
@@ -161,10 +161,10 @@ uint32_t event_machine_destroy(EM *const em)
      * it to fail either on bad faildescriptor (if blocked on epoll_wait()) or
      * on NULL pointer rather then any random memory.
      */
-    if (em->do_free_epoll_events)
+    if (em->do_free_events)
     {
-        void *tmp = em->epoll_events;
-        em->epoll_events = NULL;
+        void *tmp = em->events;
+        em->events = NULL;
         free(tmp);
     }
 
@@ -193,14 +193,14 @@ uint32_t event_machine_destroy(EM *const em)
 }
 
 static inline uint32_t event_machine_run_once(EM *const em,
-    const int epoll_fd, struct epoll_event epoll_events[], const int max_events,
+    const int queue_fd, struct epoll_event epoll_events[], const int max_events,
     const int break_loop_read_fd, bool *const break_loop)
 {
     assert(em != NULL);
-    assert(valid_fd(epoll_fd));
+    assert(valid_fd(queue_fd));
     assert(valid_fd(break_loop_read_fd));
 
-    const int num_events = epoll_wait(epoll_fd, epoll_events, max_events, -1);
+    const int num_events = epoll_wait(queue_fd, epoll_events, max_events, -1);
     if_negative (num_events)
     {
         return EM_ERROR_EPOLL_WAIT;
@@ -239,7 +239,7 @@ uint32_t event_machine_run(EM *const em)
     {
         return EM_ERROR_NULL;
     }
-    if_invalid_fd (em->epoll_fd)
+    if_invalid_fd (em->queue_fd)
     {
         return EM_ERROR_BADFD;
     }
@@ -247,12 +247,12 @@ uint32_t event_machine_run(EM *const em)
     {
         return EM_ERROR_MAX_EVENTS_TOO_SMALL;
     }
-    if_null (em->epoll_events)
+    if_null (em->events)
     {
         return EM_ERROR_EVENTS_NULL;
     }
 
-    if_negative (fcntl(em->epoll_fd, F_GETFL, 0))
+    if_negative (fcntl(em->queue_fd, F_GETFL, 0))
     {
         return EM_ERROR_BADFD;
     }
@@ -260,7 +260,7 @@ uint32_t event_machine_run(EM *const em)
     for (bool break_loop = false; not(break_loop); )
     {
         uint32_t ret =
-            event_machine_run_once(em, em->epoll_fd, em->epoll_events,
+            event_machine_run_once(em, em->queue_fd, em->events,
                 em->max_events, em->break_loop_pipe[0], &break_loop);
         if_em_failure (ret)
         {
@@ -318,23 +318,23 @@ uint32_t event_machine_add(EM *const em, EM_event_descriptor *const ed)
     }
 
     /* It doesn't make sense to try to register file descriptor if it's invalid
-     * or if epoll_fd is invalid. By checking for it we get more sensible error
+     * or if queue_fd is invalid. By checking for it we get more sensible error
      * then if we wen't ahead and called epoll_ctl().
      */
-    if (invalid_fd(em->epoll_fd) || invalid_fd(ed->fd))
+    if (invalid_fd(em->queue_fd) || invalid_fd(ed->fd))
     {
         errno = EBADF;
 
         return EM_ERROR_BADFD;
     }
-    if (is_negative(fcntl(em->epoll_fd, F_GETFL, 0))
+    if (is_negative(fcntl(em->queue_fd, F_GETFL, 0))
         || is_negative(fcntl(ed->fd, F_GETFL, 0)))
     {
         return EM_ERROR_BADFD;
     }
 
     struct epoll_event ev = {.events = ed->events, .data.ptr = ed};
-    if_not_zero (epoll_ctl(em->epoll_fd, EPOLL_CTL_ADD, ed->fd, &ev))
+    if_not_zero (epoll_ctl(em->queue_fd, EPOLL_CTL_ADD, ed->fd, &ev))
     {
         if (errno != EEXIST)
         {
@@ -346,7 +346,7 @@ uint32_t event_machine_add(EM *const em, EM_event_descriptor *const ed)
          * dup()-ed. Calling epoll_ctl() with EPOLL_CTL_MOD may succeed in such
          * case.
          */
-        if_not_zero (epoll_ctl(em->epoll_fd, EPOLL_CTL_MOD, ed->fd, &ev))
+        if_not_zero (epoll_ctl(em->queue_fd, EPOLL_CTL_MOD, ed->fd, &ev))
         {
             return EM_ERROR_EPOLL_CTL;
         }
@@ -412,16 +412,16 @@ uint32_t event_machine_delete(EM *const em, const int fd,
     }
 
     /* It doesn't make sense to try to remove file descriptor if it's invalid
-     * or if epoll_fd is invalid. By checking for it we get more sensible error
+     * or if queue_fd is invalid. By checking for it we get more sensible error
      * then if we wen't ahead and called epoll_ctl().
      */
-    if (invalid_fd(em->epoll_fd) || invalid_fd(fd))
+    if (invalid_fd(em->queue_fd) || invalid_fd(fd))
     {
         errno = EBADF;
 
         return EM_ERROR_BADFD;
     }
-    if (is_negative(fcntl(em->epoll_fd, F_GETFL, 0))
+    if (is_negative(fcntl(em->queue_fd, F_GETFL, 0))
         || is_negative(fcntl(fd, F_GETFL, 0)))
     {
         return EM_ERROR_BADFD;
@@ -431,7 +431,7 @@ uint32_t event_machine_delete(EM *const em, const int fd,
      * epoll_ctl() to be non-NULL even though it's not used.
      */
     struct epoll_event ev;
-    if_not_zero (epoll_ctl(em->epoll_fd, EPOLL_CTL_DEL, fd, &ev))
+    if_not_zero (epoll_ctl(em->queue_fd, EPOLL_CTL_DEL, fd, &ev))
     {
         return EM_ERROR_EPOLL_CTL;
     }
@@ -450,23 +450,23 @@ uint32_t event_machine_modify(EM *const em, const int fd,
     }
 
     /* It doesn't make sense to try to modify file descriptor if it's invalid
-     * or if epoll_fd is invalid. By checking for it we get more sensible error
+     * or if queue_fd is invalid. By checking for it we get more sensible error
      * then if we wen't ahead and called epoll_ctl().
      */
-    if (invalid_fd(em->epoll_fd) || invalid_fd(fd))
+    if (invalid_fd(em->queue_fd) || invalid_fd(fd))
     {
         errno = EBADF;
 
         return EM_ERROR_BADFD;
     }
-    if (is_negative(fcntl(em->epoll_fd, F_GETFL, 0))
+    if (is_negative(fcntl(em->queue_fd, F_GETFL, 0))
         || is_negative(fcntl(fd, F_GETFL, 0)))
     {
         return EM_ERROR_BADFD;
     }
 
     struct epoll_event ev = {.events = ed->events, .data.ptr = ed};
-    if_not_zero (epoll_ctl(em->epoll_fd, EPOLL_CTL_MOD, fd, &ev))
+    if_not_zero (epoll_ctl(em->queue_fd, EPOLL_CTL_MOD, fd, &ev))
     {
         return EM_ERROR_EPOLL_CTL;
     }

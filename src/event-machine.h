@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, Peter Trško <peter.trsko@gmail.com>
+/* Copyright (c) 2014, 2015, Peter Trško <peter.trsko@gmail.com>
  *
  * All rights reserved.
  *
@@ -60,14 +60,46 @@
 #ifndef EVENT_MACHINE_H_230071399244842574860511267360184913417
 #define EVENT_MACHINE_H_230071399244842574860511267360184913417
 
+#if defined(HAVE_EPOLL) && defined(HAVE_KQUEUE)
+#error HAVE_EPOLL and HAVE_KQUEUE are mutually exculisive.
+#endif
+
 #include "event-machine/result.h"
 #include <stddef.h>     /* size_t */
 #include <stdbool.h>
 #include <stdint.h>     /* uint32_t */
 
+/* {{{ Platform Dependent Imports ********************************************/
+
+#ifdef HAVE_EPOLL
+#include <sys/epoll.h>
+#endif /* HAVE_EPOLL */
+
+#if HAVE_KQUEUE
+#include <sys/event.h>
+#endif /* HAVE_KQUEUE */
+
+/* }}} Platform Dependent Imports ********************************************/
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* {{{ Platform Dependent Code ***********************************************/
+
+#if HAVE_EPOLL
+typedef struct epoll_event event_t;
+#endif /* HAVE_EPOLL */
+
+#if HAVE_KQUEUE
+#if HAVE_KEVENT64
+typedef struct kevent64_s event_t;
+#else
+typedef struct kevent event_t;
+#endif /* HAVE_KEVENT64 */
+#endif /* HAVE_KQUEUE */
+
+/* }}} Platform Dependent Code ***********************************************/
 
 /** Default value of how many events should event machine process in one
  * iteration.
@@ -187,36 +219,57 @@ typedef struct
 
 typedef struct EM_s
 {
-    int epoll_fd;
+    /** Descriptor for <tt>epoll</tt> or <tt>kqueue</tt> event queue.
+     *
+     * Used only on systems with epoll() system call (e.g. Linux).
+     *
+     * @default -1
+     */
+    int queue_fd;
 
     /** Pipe used for breaking main processing loop in which
-     * <tt>epoll_wait()</tt> is invoked followed by event processing. See
-     * <tt>event_machine_run()</tt> for details.
+     * <tt>epoll_wait()</tt> or <tt>kevent()/kevent64()</tt> is invoked
+     *
+     * @see event_machine_run()
      */
     int break_loop_pipe[2];
 
     /** Event descriptor used for registering read end of pipe used for
      * breaking main processing loop.
+     *
+     * @see #break_loop_pipe
      */
     EM_event_descriptor break_loop_event_descriptor;
 
-    /** Function <tt>epoll_wait()</tt> returns batch of events that occurred.
+    /** Maximum number of events returned by <tt>epoll_wait()</tt> or
+     * <tt>kevent()</tt> system call in one batch.
+     *
      * This variable limits maximum number of events processed in one batch and
-     * also size of <tt>epoll_events</tt> array used for storing
-     * <tt>epoll_wait()</tt> results.
+     * also size of <tt>epoll_events</tt> or <tt>kqueue_events</tt> array used
+     * for storing <tt>epoll_wait()</tt> or <tt>kevent()</tt> results,
+     * respectively.
+     *
+     * #see #events
      */
     int max_events;
 
-    /** Array used for storing events returned by <tt>epoll_wait()</tt>
-     * function. See also <tt>max_events</tt> and <tt>do_free_epoll_events</tt>
-     * entries.
+    /** Array used for storing events returned by <tt>epoll_wait()</tt> or
+     * <tt>kevent()/kevent64()</tt> function.
+     *
+     * @default NULL
+     *
+     * @see #max_events
+     * @see #do_free_events
      */
-    struct epoll_event *epoll_events;
+    event_t *events;
 
-    /** Set to true if <tt>epoll_events</tt> array was allocated in
+    /** Set to true if <tt>events</tt> array was allocated in
      * <tt>event_machine_init()</tt> and false otherwise.
+     *
+     * @see #events
+     * @see #max_events
      */
-    bool do_free_epoll_events;
+    bool do_free_events;
 
     EM_descriptor_storage descriptor_storage;
 } EM;
@@ -432,7 +485,7 @@ uint32_t event_machine_modify(EM *event_machine, int fd,
  *   then it is freed by event_machine_destroy().
  */
 #define EM_STATIC_WITH_MAX_EVENTS(maxevs, evs)  \
-    { .epoll_fd = -1                            \
+    { .queue_fd = -1                            \
     , .break_loop_pipe = {-1, -1}               \
     , .break_loop_event_descriptor =            \
         { .events = 0                           \
@@ -441,7 +494,7 @@ uint32_t event_machine_modify(EM *event_machine, int fd,
         , .handler = NULL                       \
         }                                       \
     , .max_events = maxevs                      \
-    , .epoll_events = evs                       \
+    , .events = evs                             \
     , .descriptor_storage =                     \
         { .insert = NULL                        \
         , .remove = NULL                        \

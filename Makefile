@@ -38,6 +38,9 @@ INCLUDE_PATH = $(SRC_DIR)
 CC_OUTPUT_OPTION = -o $@
 CC ?= gcc
 CFLAGS += -Wall -std=c11
+ifeq ($(shell uname -s),Linux)
+CFLAGS += -DHAVE_EPOLL
+endif
 CFLAGS += -D_POSIX_C_SOURCE=199901L
 CFLAGS += -g
 CPPFLAGS += $(addprefix -I,$(INCLUDE_PATH))
