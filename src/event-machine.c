@@ -374,7 +374,7 @@ uint32_t event_machine_run(EM *const em)
     {
         uint32_t ret =
             event_machine_run_once(em, em->queue_fd, em->events,
-                em->max_events, em->break_loop_pipe[0], &break_loop);
+                em->max_events, BREAK_LOOP_READ(em), &break_loop);
         if_em_failure (ret)
         {
             return ret;
