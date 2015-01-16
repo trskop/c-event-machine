@@ -48,10 +48,10 @@ CFLAGS += -Wall -std=c11
 CFLAGS += -D_POSIX_C_SOURCE=199901L
 
 ifeq ($(OS),Linux)
-CFLAGS += -DHAVE_EPOLL -DHAVE_PIPE2
+CFLAGS += -DUSE_EPOLL -DUSE_PIPE2
 endif
 ifeq ($(OS),Darwin)
-CFLAGS += -DHAVE_KQUEUE
+CFLAGS += -DUSE_KQUEUE
 endif
 
 CFLAGS += -g

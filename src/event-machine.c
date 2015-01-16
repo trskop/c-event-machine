@@ -30,7 +30,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifdef HAVE_PIPE2
+#ifdef USE_PIPE2
 #define _GNU_SOURCE
 #endif
 
@@ -42,7 +42,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#ifdef HAVE_EPOLL
+#ifdef USE_EPOLL
 #include <sys/epoll.h>
 
 #define GET_EVENT_DATA_PTR(e)   ((e).data.ptr)
@@ -51,9 +51,9 @@
 #define EVENT_ADD       EPOLL_CTL_ADD
 #define EVENT_MODIFY    EPOLL_CTL_MOD
 #define EVENT_DELETE    EPOLL_CTL_DEL
-#endif /* HAVE_EPOLL */
+#endif /* USE_EPOLL */
 
-#ifdef HAVE_KQUEUE
+#ifdef USE_KQUEUE
 #include <sys/types.h>
 #include <sys/event.h>
 
@@ -65,7 +65,7 @@
 #define EVENT_ADD       EV_ADD
 #define EVENT_MODIFY    EV_ADD
 #define EVENT_DELETE    EV_DELETE
-#endif /* HAVE_KQUEUE */
+#endif /* USE_KQUEUE */
 
 #define BREAK_LOOP_ED(em)       (em->break_loop_event_descriptor)
 #define BREAK_LOOP_PIPE(em)     (em->break_loop_pipe)
@@ -80,14 +80,14 @@
 
 static inline int create_event_queue()
 {
-#ifdef HAVE_EPOLL
+#ifdef USE_EPOLL
     /* Function epoll_create1() was introduced in Linux kernel 2.6.27 and glibc
      * support was added in version 2.9.
      */
     return epoll_create1(EPOLL_CLOEXEC);
-#endif /* HAVE_EPOLL */
+#endif /* USE_EPOLL */
 
-#ifdef HAVE_KQUEUE
+#ifdef USE_KQUEUE
     return kqueue();
 #endif
 }
@@ -98,7 +98,7 @@ static inline int event_ctl(const int queue_fd, EM_event_descriptor *const ed,
     const int event_fd     = ed == NULL ? fd : ed->fd;
     const int event_filter = ed == NULL ? 0  : ed->events;
 
-#ifdef HAVE_EPOLL
+#ifdef USE_EPOLL
     struct epoll_event event =
     {
         .events   = event_filter,
@@ -130,9 +130,9 @@ static inline int event_ctl(const int queue_fd, EM_event_descriptor *const ed,
     }
 
     return ret;
-#endif /* HAVE_EPOLL */
+#endif /* USE_EPOLL */
 
-#ifdef HAVE_KQUEUE
+#ifdef USE_KQUEUE
     struct kevent event =
     {
         .ident  = (uintptr_t)event_fd,
@@ -142,19 +142,19 @@ static inline int event_ctl(const int queue_fd, EM_event_descriptor *const ed,
     };
 
     return kevent(queue_fd, &event, 1, NULL, 0, NULL);
-#endif /* HAVE_KQUEUE */
+#endif /* USE_KQUEUE */
 }
 
 static inline int event_wait(const int queue_fd, event_t events[],
     const int max_events)
 {
-#ifdef HAVE_EPOLL
+#ifdef USE_EPOLL
     return epoll_wait(queue_fd, events, max_events, -1);
-#endif /* HAVE_EPOLL */
+#endif /* USE_EPOLL */
 
-#if HAVE_KQUEUE
+#if USE_KQUEUE
     return kevent(queue_fd, NULL, 0, events, max_events, NULL);
-#endif /* HAVE_KQUEUE */
+#endif /* USE_KQUEUE */
 }
 
 uint32_t event_machine_init(EM *const em)
@@ -195,12 +195,12 @@ uint32_t event_machine_init(EM *const em)
      * finite buffer size then after filling it up any subsequent
      * write, i.e. event_machine_terminate() call, would be blocked.
      */
-#if HAVE_PIPE2
+#ifdef USE_PIPE2
     if_not_zero (pipe2(BREAK_LOOP_PIPE(em), O_CLOEXEC | O_NONBLOCK))
     {
         return EM_ERROR_PIPE;
     }
-#else
+#else /* !defined(USE_PIPE2) */
     if_not_zero (pipe(BREAK_LOOP_PIPE(em)))
     {
         return EM_ERROR_PIPE;
@@ -215,7 +215,7 @@ uint32_t event_machine_init(EM *const em)
     {
         return EM_ERROR_FCNTL;
     }
-#endif /* HAVE_PIPE2 */
+#endif /* USE_PIPE2 */
 
     /* The break_loop_pipe is used to notify main event handling loop
      * that it should terminate. As a result we need to react to

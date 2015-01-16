@@ -32,7 +32,8 @@
 
 /** @file event-machine.h
  *
- * Simple low-level event machine based on Linux <tt>epoll()</tt>.
+ * Simple low-level event machine based on Linux <tt>epoll</tt> or FreeBSD
+ * <tt>kqueue</tt>.
  *
  * Usage examples can be found here:
  *
@@ -71,11 +72,11 @@
 
 /* {{{ Platform Dependent Imports ********************************************/
 
-#ifdef HAVE_EPOLL
+#ifdef USE_EPOLL
 #include <sys/epoll.h>
 #endif /* HAVE_EPOLL */
 
-#if HAVE_KQUEUE
+#if USE_KQUEUE
 #include <sys/event.h>
 #endif /* HAVE_KQUEUE */
 
