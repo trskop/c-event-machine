@@ -47,7 +47,8 @@ CC ?= gcc
 CFLAGS += -Wall -std=c11
 
 ifeq ($(OS),Linux)
-CFLAGS += -DUSE_EPOLL -DUSE_PIPE2
+CFLAGS += -DUSE_EPOLL
+CFLAGS += -DUSE_PIPE2
 endif
 ifeq ($(OS),Darwin)
 CFLAGS += -DUSE_KQUEUE

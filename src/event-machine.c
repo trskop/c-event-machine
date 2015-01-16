@@ -206,14 +206,22 @@ uint32_t event_machine_init(EM *const em)
         return EM_ERROR_PIPE;
     }
 
-    if_negative (fcntl(BREAK_LOOP_READ(em), F_SETFL, FD_CLOEXEC | O_NONBLOCK))
+    /* For both ends of the pipe we have to be set FD_CLOEXEC and O_NONBLOCK.
+     */
+    for (unsigned short int i = 0; i < 2; i++)
     {
-        return EM_ERROR_FCNTL;
-    }
+        const int fd = BREAK_LOOP_PIPE(em)[i];
 
-    if_negative (fcntl(BREAK_LOOP_WRITE(em), F_SETFL, FD_CLOEXEC | O_NONBLOCK))
-    {
-        return EM_ERROR_FCNTL;
+        const int fd_flags = fcntl(fd, F_GETFL);
+        if_negative (fd_flags)
+        {
+            return EM_ERROR_FCNTL;
+        }
+
+        if_negative (fcntl(fd, F_SETFL, fd_flags | FD_CLOEXEC | O_NONBLOCK))
+        {
+            return EM_ERROR_FCNTL;
+        }
     }
 #endif /* USE_PIPE2 */
 
