@@ -61,8 +61,8 @@
 #ifndef EVENT_MACHINE_H_230071399244842574860511267360184913417
 #define EVENT_MACHINE_H_230071399244842574860511267360184913417
 
-#if defined(HAVE_EPOLL) && defined(HAVE_KQUEUE)
-#error HAVE_EPOLL and HAVE_KQUEUE are mutually exculisive.
+#if defined(USE_EPOLL) && defined(USE_KQUEUE)
+#error USE_EPOLL and USE_KQUEUE are mutually exculisive.
 #endif
 
 #include "event-machine/result.h"
@@ -88,19 +88,19 @@ extern "C" {
 
 /* {{{ Platform Dependent Code ***********************************************/
 
-#if HAVE_EPOLL
+#if USE_EPOLL
 #define EVENT_READ  EPOLLIN
 #define EVENT_WRITE EPOLLOUT
 
 typedef struct epoll_event event_t;
-#endif /* HAVE_EPOLL */
+#endif /* USE_EPOLL */
 
-#if HAVE_KQUEUE
+#if USE_KQUEUE
 #define EVENT_READ  EVFILT_READ
 #define EVENT_WRITE EVFILT_WRITE
 
 typedef struct kevent event_t;
-#endif /* HAVE_KQUEUE */
+#endif /* USE_KQUEUE */
 
 /* }}} Platform Dependent Code ***********************************************/
 
