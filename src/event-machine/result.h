@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, Peter Trško <peter.trsko@gmail.com>
+/* Copyright (c) 2014, 2015, Peter Trško <peter.trsko@gmail.com>
  *
  * All rights reserved.
  *
