@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, Peter Trško <peter.trsko@gmail.com>
+/* Copyright (c) 2014, 2015, Peter Trško <peter.trsko@gmail.com>
  * Copyright (c) 2014, Jan Šipr <sipr.jan@gmail.com>
  *
  * All rights reserved.
@@ -30,6 +30,10 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+#if !defined(_POSIX_C_SOURCE) || _POSIX_C_SOURCE < 199901L
+#define _POSIX_C_SOURCE 199901L
+#endif
 
 #include "event-timer.h"
 #include "event-machine/result-internal.h"
