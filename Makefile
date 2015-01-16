@@ -46,13 +46,13 @@ CC_OUTPUT_OPTION = -o $@
 CFLAGS += -Wall -std=c11
 
 ifeq ($(OS),Linux)
-CC ?= gcc
+CC = gcc
 CFLAGS += -DUSE_EPOLL
 CFLAGS += -DUSE_PIPE2
 endif
 ifeq ($(OS),Darwin)
 CFLAGS += -DUSE_KQUEUE
-CC ?= clang
+CC = clang
 endif
 
 CFLAGS += -g
