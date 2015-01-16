@@ -43,15 +43,16 @@ EXAMPLE_EXECUTABLES = $(subst $(EXAMPLE),$(EXE),$(EXAMPLE_SOURCES:.c=))
 INCLUDE_PATH = $(SRC_DIR)
 
 CC_OUTPUT_OPTION = -o $@
-CC ?= gcc
 CFLAGS += -Wall -std=c11
 
 ifeq ($(OS),Linux)
+CC ?= gcc
 CFLAGS += -DUSE_EPOLL
 CFLAGS += -DUSE_PIPE2
 endif
 ifeq ($(OS),Darwin)
 CFLAGS += -DUSE_KQUEUE
+CC ?= clang
 endif
 
 CFLAGS += -g
