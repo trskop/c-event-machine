@@ -35,11 +35,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/epoll.h>
 #include <unistd.h>
 
 
-void stdin_handler(EM *em, uint32_t events, int fd, void *data)
+void stdin_handler(EM *em, event_filter_t events, int fd, void *data)
 {
     char buffer[4096];
     ssize_t len;
@@ -78,8 +77,8 @@ int main()
     //
     // This way the event machine desn't need to allocate memory in
     // event_machine_init().
-    struct epoll_event epoll_events[EM_DEFAULT_MAX_EVENTS];
-    EM em = EM_STATIC_WITH_MAX_EVENTS(EM_DEFAULT_MAX_EVENTS, epoll_events);
+    event_t events[EM_DEFAULT_MAX_EVENTS];
+    EM em = EM_STATIC_WITH_MAX_EVENTS(EM_DEFAULT_MAX_EVENTS, events);
 
     // Initialize event machine structure.
     //
@@ -99,7 +98,7 @@ int main()
     // For list of acceptable events see EM_event_descriptor documentation or
     // epoll(7) manual page.
     EM_event_descriptor ed =
-        { .events = EPOLLIN
+        { .events = EVENT_READ
         , .fd = STDIN_FILENO
         , .data = NULL
         , .handler = stdin_handler

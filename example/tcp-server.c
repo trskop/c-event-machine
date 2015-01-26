@@ -57,7 +57,7 @@ struct accept_connection_data
     struct connection_data data;
 };
 
-void connection_hadnler(EM *em, uint32_t events, int socket, void *data)
+void connection_hadnler(EM *em, event_filter_t events, int socket, void *data)
 {
     struct sockaddr_in remote_address =
         ((struct connection_data *)data)->remote_address;
@@ -105,7 +105,8 @@ void connection_hadnler(EM *em, uint32_t events, int socket, void *data)
     }
 }
 
-void accept_handler(EM *em, uint32_t events, int listening_socket, void *data)
+void accept_handler(EM *em, event_filter_t events, int listening_socket,
+    void *data)
 {
     int socket;
     socklen_t remote_address_len = sizeof(struct sockaddr_in);
@@ -132,7 +133,7 @@ void accept_handler(EM *em, uint32_t events, int listening_socket, void *data)
         return;
     }
 
-    ed->events = EPOLLIN | EPOLLRDHUP | EPOLLET;
+    ed->events = EVENT_READ | EPOLLRDHUP | EPOLLET;
     ed->fd = socket;
     ed->data = &(accept_data->data);
     ed->handler = connection_hadnler;
@@ -151,9 +152,8 @@ int main()
 {
     int listening_socket;
 
-    const size_t max_epoll_events = EM_DEFAULT_MAX_EVENTS;
-    struct epoll_event epoll_events[max_epoll_events];
-    EM em = EM_STATIC_WITH_MAX_EVENTS(max_epoll_events, epoll_events);
+    event_t events[EM_DEFAULT_MAX_EVENTS];
+    EM em = EM_STATIC_WITH_MAX_EVENTS(EM_DEFAULT_MAX_EVENTS, events);
 
     listening_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (listening_socket < 0)

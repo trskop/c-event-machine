@@ -37,12 +37,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/epoll.h>
 #include <unistd.h>
 
 
 // Explained in stdin-stdout.c example.
-void stdin_handler(EM *em, uint32_t events, int fd, void *data)
+void stdin_handler(EM *em, event_filter_t events, int fd, void *data)
 {
     char buffer[4096];
     ssize_t len;
@@ -83,8 +82,8 @@ void oneshot_timer_timeout(Event_timer *timer, void *data)
 
 int main()
 {
-    struct epoll_event epoll_events[EM_DEFAULT_MAX_EVENTS];
-    EM em = EM_STATIC_WITH_MAX_EVENTS(EM_DEFAULT_MAX_EVENTS, epoll_events);
+    event_t events[EM_DEFAULT_MAX_EVENTS];
+    EM em = EM_STATIC_WITH_MAX_EVENTS(EM_DEFAULT_MAX_EVENTS, events);
 
     // Event machine initialization must be executed before timer_create().
     if_em_failure (event_machine_init(&em))
@@ -96,7 +95,7 @@ int main()
     // interruptible. This is not important for event-timer. See
     // stdin-stdout.c example for details.
     EM_event_descriptor ed =
-        { .events = EPOLLIN
+        { .events = EVENT_READ
         , .fd = STDIN_FILENO
         , .data = NULL
         , .handler = stdin_handler
