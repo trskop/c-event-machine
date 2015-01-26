@@ -93,6 +93,7 @@ extern "C" {
 #define EVENT_WRITE EPOLLOUT
 
 typedef struct epoll_event event_t;
+typedef uint32_t event_filter_t;
 #endif /* USE_EPOLL */
 
 #if USE_KQUEUE
@@ -100,6 +101,7 @@ typedef struct epoll_event event_t;
 #define EVENT_WRITE EVFILT_WRITE
 
 typedef struct kevent event_t;
+typedef int16_t event_filter_t;
 #endif /* USE_KQUEUE */
 
 /* }}} Platform Dependent Code ***********************************************/
@@ -169,7 +171,7 @@ typedef struct
     /** Events as passed to epoll_ctl(). Do not confuse them with events that
      * actually occurred.
      */
-    uint32_t events;
+    event_filter_t events;
 
     /** File descriptor registered with epoll_ctl(). It is also used as an
      * index for storing pointers to EM_event_descriptor structures.
