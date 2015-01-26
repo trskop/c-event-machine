@@ -129,8 +129,8 @@ struct EM_s;    /* Forward declaration */
  *   Pointer to private data associated with this specific file descriptor
  *   via EM_event_descriptor.
  */
-typedef void (*EM_event_handler)(struct EM_s *event_machine, uint32_t events,
-    int fd, void *data);
+typedef void (*EM_event_handler)(struct EM_s *event_machine,
+    event_filter_t events, int fd, void *data);
 
 /** Structure that describes set of events that event machine monitors on
  * specific file descriptor.
